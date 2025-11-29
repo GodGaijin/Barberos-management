@@ -1,0 +1,117 @@
+<div class="page-header">
+    <h2>Gestión de Empleados</h2>
+    <button id="btn-nuevo-empleado" class="btn btn-primary">+ Nuevo Empleado</button>
+</div>
+
+<div class="page-content">
+    <!-- Barra de búsqueda -->
+    <div class="search-bar">
+        <input type="text" id="search-empleado" placeholder="Buscar por nombre, apellido o cédula..." class="search-input">
+        <select id="filter-tipo-cedula" class="filter-select">
+            <option value="all">Todos los tipos</option>
+            <option value="V">Venezolano (V)</option>
+            <option value="E">Extranjero (E)</option>
+            <option value="G">Gubernamental (G)</option>
+            <option value="J">Jurídico (J)</option>
+        </select>
+    </div>
+
+    <!-- Tabla de empleados -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Nombre</th>
+                    <th>Apellido</th>
+                    <th>Cédula</th>
+                    <th>Teléfono</th>
+                    <th>Fecha de Nacimiento</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="empleados-table-body">
+                <tr>
+                    <td colspan="7" class="loading">Cargando empleados...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal para crear/editar empleado -->
+<div id="empleado-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">Nuevo Empleado</h3>
+            <button class="modal-close" id="close-modal">&times;</button>
+        </div>
+        <form id="empleado-form">
+            <input type="hidden" id="empleado-id">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="empleado-nombre">Nombre *</label>
+                    <input type="text" id="empleado-nombre" name="nombre" required>
+                </div>
+                <div class="form-group">
+                    <label for="empleado-apellido">Apellido *</label>
+                    <input type="text" id="empleado-apellido" name="apellido" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="empleado-tipo-cedula">Tipo de Cédula *</label>
+                    <select id="empleado-tipo-cedula" name="tipo_cedula" required>
+                        <option value="">Seleccione...</option>
+                        <option value="V">Venezolano (V)</option>
+                        <option value="E">Extranjero (E)</option>
+                        <option value="G">Gubernamental (G)</option>
+                        <option value="J">Jurídico (J)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="empleado-cedula">Cédula *</label>
+                    <input type="text" id="empleado-cedula" name="cedula" required placeholder="Ej: 27682015" inputmode="numeric">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="empleado-telefono">Teléfono</label>
+                    <input type="text" id="empleado-telefono" name="telefono" placeholder="Ej: 04141234567">
+                </div>
+                <div class="form-group">
+                    <label for="empleado-fecha-nacimiento">Fecha de Nacimiento *</label>
+                    <input type="text" id="empleado-fecha-nacimiento" name="fecha_nacimiento" required placeholder="DD/MM" maxlength="5">
+                    <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block;">Formato: DD/MM (ej: 05/09)</small>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-empleado">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal de confirmación para eliminar -->
+<div id="delete-modal" class="modal">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h3>Confirmar Eliminación</h3>
+            <button class="modal-close" id="close-delete-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>¿Estás seguro de que deseas eliminar este empleado?</p>
+            <p class="warning-text">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-delete">Cancelar</button>
+            <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,104 @@
+<div class="page-header">
+    <h2>Gestión de Productos</h2>
+    <button id="btn-nuevo-producto" class="btn btn-primary">+ Nuevo Producto</button>
+</div>
+
+<div class="page-content">
+    <!-- Barra de búsqueda -->
+    <div class="search-bar">
+        <input type="text" id="search-producto" placeholder="Buscar por nombre..." class="search-input">
+        <select id="filter-stock" class="filter-select">
+            <option value="all">Todos los productos</option>
+            <option value="con-stock">Con stock disponible</option>
+            <option value="sin-stock">Sin stock</option>
+        </select>
+    </div>
+
+    <!-- Tabla de productos -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Nombre</th>
+                    <th>Cantidad (Stock)</th>
+                    <th>Precio Ref. ($)</th>
+                    <th>Precio (Bs)</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="productos-table-body">
+                <tr>
+                    <td colspan="6" class="loading">Cargando productos...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal para crear/editar producto -->
+<div id="producto-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">Nuevo Producto</h3>
+            <button class="modal-close" id="close-modal">&times;</button>
+        </div>
+        <form id="producto-form">
+            <input type="hidden" id="producto-id">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="producto-nombre">Nombre *</label>
+                    <input type="text" id="producto-nombre" name="nombre" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="producto-cantidad">Cantidad (Stock) *</label>
+                    <input type="text" id="producto-cantidad" name="cantidad" required placeholder="0" inputmode="numeric">
+                </div>
+                <div class="form-group">
+                    <label for="producto-precio-dolares">Precio Referencia ($) *</label>
+                    <input type="text" id="producto-precio-dolares" name="precio_dolares" required placeholder="0.00" inputmode="decimal">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="producto-precio-bs">Precio (Bs)</label>
+                    <input type="text" id="producto-precio-bs" name="precio_bs" placeholder="Se calcula automáticamente" inputmode="decimal" readonly>
+                    <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block;">Se calcula automáticamente según la tasa del día</small>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <p><strong>Nota:</strong> El precio en bolívares se calcula automáticamente según la tasa del día actual. Si no hay tasa establecida para hoy, se mostrará como "No disponible".</p>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-producto">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal de confirmación para eliminar -->
+<div id="delete-modal" class="modal">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h3>Confirmar Eliminación</h3>
+            <button class="modal-close" id="close-delete-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>¿Estás seguro de que deseas eliminar este producto?</p>
+            <p class="warning-text">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-delete">Cancelar</button>
+            <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,96 @@
+<div class="page-header">
+    <h2>Reportes Diarios</h2>
+    <button id="btn-generar-reporte" class="btn btn-primary">+ Generar Reporte</button>
+</div>
+
+<div class="page-content">
+    <!-- Barra de búsqueda y filtros -->
+    <div class="search-bar">
+        <input type="text" id="search-reporte" placeholder="Buscar por fecha..." class="search-input">
+        <input type="date" id="filter-fecha" class="filter-select" style="max-width: 200px;">
+    </div>
+
+    <!-- Tabla de reportes -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Fecha del Reporte</th>
+                    <th>Fecha de Creación</th>
+                    <th>Tasa del Día</th>
+                    <th>Transacciones</th>
+                    <th>Ingresos (Bs)</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="reportes-table-body">
+                <tr>
+                    <td colspan="7" class="loading">Cargando reportes...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal para generar reporte -->
+<div id="reporte-modal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3>Generar Reporte Diario</h3>
+            <button class="modal-close" id="close-modal">&times;</button>
+        </div>
+        <form id="reporte-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="reporte-fecha">Fecha del Reporte *</label>
+                    <input type="date" id="reporte-fecha" name="fecha_reporte" required>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <p><strong>Nota:</strong> Se generará un reporte con toda la información del día seleccionado: tasa de cambio, nóminas pagadas, servicios realizados, productos vendidos y transacciones cerradas.</p>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-reporte">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="generar-reporte">Generar Reporte</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para ver detalles del reporte -->
+<div id="ver-reporte-modal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3 id="ver-reporte-titulo">Detalles del Reporte</h3>
+            <button class="modal-close" id="close-ver-modal">&times;</button>
+        </div>
+        <div id="ver-reporte-contenido" style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+            <!-- El contenido se llenará dinámicamente -->
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cerrar-ver-reporte">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación para eliminar -->
+<div id="delete-modal" class="modal">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h3>Confirmar Eliminación</h3>
+            <button class="modal-close" id="close-delete-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>¿Estás seguro de que deseas eliminar este reporte?</p>
+            <p class="warning-text">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-delete">Cancelar</button>
+            <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,114 @@
+<div class="page-header">
+    <h2>Citas y Reservas</h2>
+    <button id="btn-nueva-cita" class="btn btn-primary">+ Nueva Cita</button>
+</div>
+
+<div class="page-content">
+    <!-- Barra de búsqueda y filtros -->
+    <div class="search-bar">
+        <input type="text" id="search-cita" placeholder="Buscar por notas..." class="search-input">
+        <select id="filter-estado" class="filter-select">
+            <option value="all">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="confirmada">Confirmada</option>
+            <option value="completada">Completada</option>
+            <option value="cancelada">Cancelada</option>
+                    <option value="no_show">No se presentó</option>
+        </select>
+        <input type="date" id="filter-fecha" class="filter-select" style="max-width: 200px;">
+    </div>
+
+    <!-- Tabla de citas -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Cliente</th>
+                    <th>Fecha y Hora</th>
+                    <th>Estado</th>
+                    <th>Notas</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="citas-table-body">
+                <tr>
+                    <td colspan="6" class="loading">Cargando citas...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal para crear/editar cita -->
+<div id="cita-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">Nueva Cita</h3>
+            <button class="modal-close" id="close-modal">&times;</button>
+        </div>
+        <form id="cita-form">
+            <input type="hidden" id="cita-id">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="cita-cliente">Cliente</label>
+                    <select id="cita-cliente" name="id_cliente">
+                        <option value="">Sin cliente (reserva general)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="cita-fecha">Fecha *</label>
+                    <input type="date" id="cita-fecha" name="fecha" required>
+                </div>
+                <div class="form-group">
+                    <label for="cita-hora">Hora *</label>
+                    <input type="time" id="cita-hora" name="hora" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="cita-estado">Estado *</label>
+                <select id="cita-estado" name="estado" required>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="confirmada">Confirmada</option>
+                    <option value="completada">Completada</option>
+                    <option value="cancelada">Cancelada</option>
+                    <option value="no_show">No se presentó</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="cita-notas">Notas</label>
+                <textarea id="cita-notas" name="notas" rows="4" placeholder="Notas adicionales sobre la cita..."></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-cita">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="guardar-cita">Guardar Cita</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal de confirmación para eliminar -->
+<div id="delete-modal" class="modal">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h3>Confirmar Eliminación</h3>
+            <button class="modal-close" id="close-delete-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>¿Estás seguro de que deseas eliminar esta cita?</p>
+            <p class="warning-text">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-delete">Cancelar</button>
+            <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
+        </div>
+    </div>
+</div>
+

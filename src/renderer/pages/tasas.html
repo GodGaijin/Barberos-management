@@ -1,0 +1,97 @@
+<div class="page-header">
+    <h2>Gestión de Tasas de Cambio</h2>
+    <button id="btn-nueva-tasa" class="btn btn-primary">+ Nueva Tasa</button>
+</div>
+
+<div class="page-content">
+    <!-- Información de tasa actual -->
+    <div class="info-box tasa-actual-box">
+        <div class="tasa-actual-content">
+            <div>
+                <h3>Tasa del Día</h3>
+                <p id="tasa-actual-fecha" class="tasa-fecha">-</p>
+            </div>
+            <div>
+                <p id="tasa-actual-valor" class="tasa-valor">-</p>
+                <span class="tasa-label">Bs por $</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de búsqueda -->
+    <div class="search-bar">
+        <input type="date" id="search-fecha" class="search-input" placeholder="Buscar por fecha...">
+        <button id="btn-tasa-hoy" class="btn btn-secondary">Establecer Tasa de Hoy</button>
+    </div>
+
+    <!-- Tabla de tasas -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Fecha</th>
+                    <th>Tasa (Bs por $)</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tasas-table-body">
+                <tr>
+                    <td colspan="4" class="loading">Cargando tasas...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal para crear/editar tasa -->
+<div id="tasa-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">Nueva Tasa de Cambio</h3>
+            <button class="modal-close" id="close-modal">&times;</button>
+        </div>
+        <form id="tasa-form">
+            <input type="hidden" id="tasa-id">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="tasa-fecha">Fecha *</label>
+                    <input type="date" id="tasa-fecha" name="fecha" required>
+                </div>
+                <div class="form-group">
+                    <label for="tasa-valor">Tasa (Bs por $) *</label>
+                    <input type="text" id="tasa-valor" name="tasa" required placeholder="0.00" inputmode="decimal">
+                </div>
+            </div>
+
+            <div class="info-box">
+                <p><strong>Nota:</strong> La tasa se usa para calcular los precios en bolívares a partir de los precios de referencia en dólares.</p>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-tasa">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal de confirmación para eliminar -->
+<div id="delete-modal" class="modal">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h3>Confirmar Eliminación</h3>
+            <button class="modal-close" id="close-delete-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>¿Estás seguro de que deseas eliminar esta tasa de cambio?</p>
+            <p class="warning-text">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-delete">Cancelar</button>
+            <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
+        </div>
+    </div>
+</div>
+

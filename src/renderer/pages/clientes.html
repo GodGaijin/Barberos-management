@@ -1,0 +1,126 @@
+<div class="page-header">
+    <h2>Gestión de Clientes</h2>
+    <button id="btn-nuevo-cliente" class="btn btn-primary">+ Nuevo Cliente</button>
+</div>
+
+<div class="page-content">
+    <!-- Barra de búsqueda -->
+    <div class="search-bar">
+        <input type="text" id="search-cliente" placeholder="Buscar por nombre, apellido o cédula..." class="search-input">
+        <select id="filter-tipo-cliente" class="filter-select">
+            <option value="all">Todos los clientes</option>
+            <option value="registrado">Clientes registrados</option>
+            <option value="contado">Cliente contado</option>
+        </select>
+    </div>
+
+    <!-- Tabla de clientes -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Nombre</th>
+                    <th>Apellido</th>
+                    <th>Cédula</th>
+                    <th>Teléfono</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="clientes-table-body">
+                <tr>
+                    <td colspan="6" class="loading">Cargando clientes...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal para crear/editar cliente -->
+<div id="cliente-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">Nuevo Cliente</h3>
+            <button class="modal-close" id="close-modal">&times;</button>
+        </div>
+        <form id="cliente-form">
+            <input type="hidden" id="cliente-id">
+            
+            <div class="form-row" id="tipo-cliente-row" style="display: none;">
+                <div class="form-group">
+                    <label for="cliente-tipo">Tipo de Cliente *</label>
+                    <select id="cliente-tipo" name="tipo" required>
+                        <option value="registrado">Cliente Registrado</option>
+                        <option value="contado" id="option-contado" style="display: none;">Cliente Contado</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="cliente-registrado-fields">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cliente-nombre">Nombre *</label>
+                        <input type="text" id="cliente-nombre" name="nombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cliente-apellido">Apellido *</label>
+                        <input type="text" id="cliente-apellido" name="apellido" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cliente-tipo-cedula">Tipo de Cédula *</label>
+                        <select id="cliente-tipo-cedula" name="tipo_cedula" required>
+                            <option value="V">V - Venezolano</option>
+                            <option value="E">E - Extranjero</option>
+                            <option value="G">G - Gubernamental</option>
+                            <option value="J">J - Jurídico</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cliente-cedula">Cédula *</label>
+                        <input type="number" id="cliente-cedula" name="cedula" required min="0">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cliente-telefono">Teléfono</label>
+                        <input type="text" id="cliente-telefono" name="telefono" placeholder="Opcional">
+                    </div>
+                </div>
+            </div>
+
+            <div id="cliente-contado-info" style="display: none;">
+                <div class="info-box">
+                    <p><strong>Cliente Contado:</strong> Este cliente se registrará automáticamente con nombre "CLIENTE CONTADO" y cédula "NA".</p>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-cliente">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal de confirmación para eliminar -->
+<div id="delete-modal" class="modal">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h3>Confirmar Eliminación</h3>
+            <button class="modal-close" id="close-delete-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>¿Estás seguro de que deseas eliminar este cliente?</p>
+            <p class="warning-text">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-delete">Cancelar</button>
+            <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,148 @@
+<div class="page-header">
+    <h2>Nóminas y Pagos</h2>
+    <button id="btn-nueva-nomina" class="btn btn-primary">+ Nueva Nómina</button>
+</div>
+
+<div class="page-content">
+    <!-- Barra de búsqueda y filtros -->
+    <div class="search-bar">
+        <input type="text" id="search-nomina" placeholder="Buscar por empleado..." class="search-input">
+        <select id="filter-empleado" class="filter-select">
+            <option value="all">Todos los empleados</option>
+        </select>
+        <input type="date" id="filter-fecha" class="filter-select" style="max-width: 200px;">
+    </div>
+
+    <!-- Tabla de nóminas -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Empleado</th>
+                    <th>Fecha de Pago</th>
+                    <th>Comisiones Ref. ($)</th>
+                    <th>Comisiones (Bs)</th>
+                    <th>Propinas Ref. ($)</th>
+                    <th>Propinas (Bs)</th>
+                    <th>Descuentos (Bs)</th>
+                    <th>Total Pagado (Bs)</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="nominas-table-body">
+                <tr>
+                    <td colspan="10" class="loading">Cargando nóminas...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal para crear/editar nómina -->
+<div id="nomina-modal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3 id="modal-title">Nueva Nómina</h3>
+            <button class="modal-close" id="close-modal">&times;</button>
+        </div>
+        <form id="nomina-form">
+            <input type="hidden" id="nomina-id">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nomina-empleado">Empleado *</label>
+                    <select id="nomina-empleado" name="id_empleado" required>
+                        <option value="">Seleccione un empleado...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="nomina-fecha">Fecha de Pago *</label>
+                    <input type="date" id="nomina-fecha" name="fecha_pago" required>
+                </div>
+            </div>
+
+            <!-- Resumen de servicios realizados -->
+            <div class="form-group">
+                <label>Servicios Realizados</label>
+                <div id="servicios-resumen" style="background: var(--bg-secondary); padding: 15px; border-radius: 6px; margin-bottom: 15px; max-height: 200px; overflow-y: auto;">
+                    <p style="color: var(--text-secondary);">Seleccione un empleado y fecha para ver los servicios</p>
+                </div>
+            </div>
+
+            <!-- Resumen de consumos pendientes -->
+            <div class="form-group">
+                <label>Consumos Pendientes</label>
+                <div id="consumos-resumen" style="background: var(--bg-secondary); padding: 15px; border-radius: 6px; margin-bottom: 15px; max-height: 200px; overflow-y: auto;">
+                    <p style="color: var(--text-secondary);">Seleccione un empleado y fecha para ver los consumos</p>
+                </div>
+            </div>
+
+            <!-- Totales calculados -->
+            <div class="form-row">
+                <div class="form-group" style="flex: 1;">
+                    <label>Comisiones Ref. ($)</label>
+                    <input type="text" id="nomina-comisiones-dolares" name="comisiones_dolares" placeholder="0.00" readonly>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Comisiones (Bs)</label>
+                    <input type="text" id="nomina-comisiones-bs" name="comisiones_bs" placeholder="0.00" readonly>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group" style="flex: 1;">
+                    <label>Propinas Ref. ($)</label>
+                    <input type="text" id="nomina-propinas-dolares" name="propinas_dolares" placeholder="0.00" readonly>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Propinas (Bs)</label>
+                    <input type="text" id="nomina-propinas-bs" name="propinas_bs" placeholder="0.00" readonly>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group" style="flex: 1;">
+                    <label>Descuentos Consumos (Bs)</label>
+                    <input type="text" id="nomina-descuentos" name="descuentos" placeholder="0.00" readonly>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Total a Pagar (Bs) *</label>
+                    <input type="text" id="nomina-total" name="total_pagado" placeholder="0.00" readonly style="font-size: 18px; font-weight: 600;">
+                </div>
+            </div>
+
+            <div id="nomina-advertencia" style="display: none; background: #dc3545; color: #333; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                <p style="margin: 0; font-weight: 600;">⚠️ Ya existe una nómina para este empleado en esta fecha. No se puede crear otra nómina.</p>
+            </div>
+
+            <div class="info-box">
+                <p><strong>Nota:</strong> Los valores se calculan automáticamente según los servicios realizados y consumos pendientes del empleado en la fecha seleccionada. Al guardar, se marcarán los consumos como pagados.</p>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-nomina">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="guardar-nomina">Guardar Nómina</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal de confirmación para eliminar -->
+<div id="delete-modal" class="modal">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h3>Confirmar Eliminación</h3>
+            <button class="modal-close" id="close-delete-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>¿Estás seguro de que deseas eliminar esta nómina?</p>
+            <p class="warning-text">Esta acción no se puede deshacer. Los consumos asociados volverán a estar pendientes.</p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-delete">Cancelar</button>
+            <button type="button" class="btn btn-danger" id="confirm-delete">Eliminar</button>
+        </div>
+    </div>
+</div>
+
