@@ -1,0 +1,84 @@
+<div class="page-container">
+    <div class="page-header">
+        <h2>Dashboard</h2>
+        <button id="refresh-dashboard" class="btn btn-secondary">🔄 Actualizar</button>
+    </div>
+
+    <!-- Advertencias -->
+    <div id="dashboard-warnings" class="dashboard-warnings"></div>
+
+    <!-- Tarjetas de Estadísticas -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-content">
+                <h3>Ingresos del Día</h3>
+                <p class="stat-value" id="ingresos-hoy">Bs. 0.00</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📋</div>
+            <div class="stat-content">
+                <h3>Transacciones Pendientes</h3>
+                <p class="stat-value" id="transacciones-pendientes">0</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📅</div>
+            <div class="stat-content">
+                <h3>Citas Hoy</h3>
+                <p class="stat-value" id="citas-hoy">0</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-content">
+                <h3>Empleados Activos</h3>
+                <p class="stat-value" id="empleados-activos">0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Secciones principales -->
+    <div class="dashboard-grid">
+        <!-- Transacciones Pendientes -->
+        <div class="dashboard-section">
+            <div class="section-header">
+                <h3>🛒 Transacciones Pendientes</h3>
+                <a href="#" data-page="transacciones" class="btn-link">Ver todas →</a>
+            </div>
+            <div class="section-content">
+                <div id="transacciones-list" class="dashboard-list">
+                    <p class="loading">Cargando transacciones...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Citas Próximas -->
+        <div class="dashboard-section">
+            <div class="section-header">
+                <h3>📅 Citas Próximas</h3>
+                <a href="#" data-page="citas" class="btn-link">Ver todas →</a>
+            </div>
+            <div class="section-content">
+                <div id="citas-list" class="dashboard-list">
+                    <p class="loading">Cargando citas...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nóminas Pendientes -->
+    <div class="dashboard-section full-width">
+        <div class="section-header">
+            <h3>💼 Nóminas Pendientes</h3>
+            <a href="#" data-page="nominas" class="btn-link">Ver todas →</a>
+        </div>
+        <div class="section-content">
+            <div id="nominas-list" class="dashboard-list">
+                <p class="loading">Cargando nóminas...</p>
+            </div>
+        </div>
+    </div>
+</div>
+

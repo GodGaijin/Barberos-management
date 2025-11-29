@@ -147,6 +147,7 @@ async function navigateToPage(page) {
     
     // Mapeo de páginas a archivos
     const pageMap = {
+        'dashboard': 'pages/dashboard.html',
         'clientes': 'pages/clientes.html',
         'productos': 'pages/productos.html',
         'servicios': 'pages/servicios.html',
@@ -156,8 +157,7 @@ async function navigateToPage(page) {
         'nominas': 'pages/nominas.html',
         'tasas': 'pages/tasas.html',
         'reportes': 'pages/reportes.html',
-        'citas': 'pages/citas.html',
-        'dashboard': null
+        'citas': 'pages/citas.html'
     };
     
     const pageFile = pageMap[page];
@@ -225,6 +225,9 @@ function initPageModule(page) {
         } else if (page === 'tasas' && typeof window.initTasas === 'function') {
             console.log('Inicializando tasas...');
             window.initTasas();
+        } else if (page === 'dashboard' && typeof window.initDashboard === 'function') {
+            console.log('Inicializando dashboard...');
+            window.initDashboard();
         } else {
             console.warn(`Función de inicialización no encontrada para ${page}`);
         }
