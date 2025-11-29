@@ -11,8 +11,8 @@ Edita el archivo `package.json` y actualiza la sección `build.publish` con tu i
 ```json
 "publish": {
   "provider": "github",
-  "owner": "TU_USUARIO_GITHUB",
-  "repo": "TU_REPOSITORIO"
+  "owner": "GodGaijin",
+  "repo": "Barberos-management"
 }
 ```
 
@@ -36,12 +36,12 @@ Edita el archivo `package.json` y actualiza la sección `build.publish` con tu i
 
 **Windows (PowerShell):**
 ```powershell
-$env:GH_TOKEN="tu_token_aqui"
+$env:GH_TOKEN="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"
 ```
 
 **Windows (CMD):**
 ```cmd
-set GH_TOKEN=tu_token_aqui
+set GH_TOKEN=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
 ```
 
 **Linux/Mac:**

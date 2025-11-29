@@ -1,6 +1,6 @@
 {
   "name": "barberos-management",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sistema de gestión para barbería",
   "main": "src/main/main.js",
   "scripts": {
@@ -40,8 +40,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "TU_USUARIO_GITHUB",
-      "repo": "TU_REPOSITORIO"
+      "owner": "GodGaijin",
+      "repo": "Barberos-management"
     }
   }
 }
