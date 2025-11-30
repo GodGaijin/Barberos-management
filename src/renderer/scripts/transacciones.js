@@ -80,6 +80,12 @@
             const closeCerrarModal = document.getElementById('close-cerrar-modal');
             if (closeCerrarModal) closeCerrarModal.onclick = cerrarModalCerrar;
             
+            const closeVerTransaccionModal = document.getElementById('close-ver-transaccion-modal');
+            if (closeVerTransaccionModal) closeVerTransaccionModal.onclick = cerrarModalVer;
+            
+            const cerrarVerTransaccion = document.getElementById('cerrar-ver-transaccion');
+            if (cerrarVerTransaccion) cerrarVerTransaccion.onclick = cerrarModalVer;
+            
             const closeDeleteModal = document.getElementById('close-delete-modal');
             if (closeDeleteModal) closeDeleteModal.onclick = cerrarModalEliminar;
             
@@ -148,6 +154,15 @@
                 cerrarTransaccionModal.onclick = (e) => {
                     if (e.target === e.currentTarget) {
                         cerrarModalCerrar();
+                    }
+                };
+            }
+
+            const verTransaccionModal = document.getElementById('ver-transaccion-modal');
+            if (verTransaccionModal) {
+                verTransaccionModal.onclick = (e) => {
+                    if (e.target === e.currentTarget) {
+                        cerrarModalVer();
                     }
                 };
             }
@@ -1273,24 +1288,114 @@
                 return;
             }
 
-            let mensaje = `Transacción #${transaccion.id}\n\n`;
-            mensaje += `Cliente: ${transaccion.nombre_cliente}\n`;
-            mensaje += `Fecha Apertura: ${transaccion.fecha_apertura}\n`;
-            if (transaccion.fecha_cierre) {
-                mensaje += `Fecha Cierre: ${transaccion.fecha_cierre}\n`;
-            }
-            mensaje += `Estado: ${transaccion.estado}\n`;
-            mensaje += `Total: ${parseFloat(transaccion.total_en_bs).toFixed(2)} Bs\n\n`;
-            mensaje += `Servicios: ${transaccion.servicios_consumidos || 'Ninguno'}\n`;
-            mensaje += `Productos: ${transaccion.productos_comprados_nombres || 'Ninguno'}\n`;
+            // Obtener servicios realizados
+            const serviciosRealizados = await window.electronAPI.dbQuery(`
+                SELECT 
+                    sr.*,
+                    s.nombre as nombre_servicio,
+                    e.nombre || ' ' || e.apellido as nombre_empleado
+                FROM ServiciosRealizados sr
+                JOIN Servicios s ON sr.id_servicio = s.id
+                JOIN Empleados e ON sr.id_empleado = e.id
+                WHERE sr.id_transaccion = ? AND sr.estado = 'completado'
+            `, [id]);
+
+            // Obtener productos vendidos
+            const productosVendidos = await window.electronAPI.dbQuery(`
+                SELECT 
+                    pv.*,
+                    p.nombre as nombre_producto
+                FROM ProductosVendidos pv
+                JOIN Productos p ON pv.id_producto = p.id
+                WHERE pv.id_transaccion = ?
+            `, [id]);
+
+            // Formatear fecha
+            let fechaApertura = transaccion.fecha_apertura;
+            let fechaCierre = transaccion.fecha_cierre || '-';
             
-            if (transaccion.estado === 'cerrada') {
-                mensaje += `\nMétodos de Pago: ${transaccion.metodos_pago || 'No especificado'}\n`;
-                mensaje += `Entidades: ${transaccion.entidades_pago || 'No especificado'}\n`;
-                mensaje += `Número de Referencia: ${transaccion.numero_referencia || 'No especificado'}\n`;
-            }
+            document.getElementById('ver-transaccion-titulo').textContent = `Transacción #${transaccion.id}`;
             
-            alert(mensaje);
+            const contenido = document.getElementById('ver-transaccion-contenido');
+            contenido.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Información General</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <p><strong>Cliente:</strong> ${transaccion.nombre_cliente}</p>
+                            <p><strong>Estado:</strong> <span class="badge ${transaccion.estado === 'cerrada' ? 'estado-pagado' : 'estado-pendiente'}">${transaccion.estado === 'cerrada' ? 'Cerrada' : 'Abierta'}</span></p>
+                            <p><strong>Fecha Apertura:</strong> ${fechaApertura}</p>
+                            ${transaccion.fecha_cierre ? `<p><strong>Fecha Cierre:</strong> ${fechaCierre}</p>` : ''}
+                            <p><strong>Total:</strong> ${parseFloat(transaccion.total_en_bs || 0).toFixed(2)} Bs ($${parseFloat(transaccion.total_en_dolares || 0).toFixed(2)})</p>
+                        </div>
+                    </div>
+
+                    ${serviciosRealizados && serviciosRealizados.length > 0 ? `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Servicios Realizados (${serviciosRealizados.length})</h4>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <th style="text-align: left; padding: 8px;">Servicio</th>
+                                    <th style="text-align: left; padding: 8px;">Empleado</th>
+                                    <th style="text-align: right; padding: 8px;">Precio</th>
+                                    <th style="text-align: right; padding: 8px;">Propina</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${serviciosRealizados.map(s => `
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 8px;">${s.nombre_servicio}</td>
+                                        <td style="padding: 8px;">${s.nombre_empleado}</td>
+                                        <td style="text-align: right; padding: 8px;">${parseFloat(s.precio_cobrado).toFixed(2)} Bs</td>
+                                        <td style="text-align: right; padding: 8px;">${parseFloat(s.propina || 0).toFixed(2)} Bs</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ` : ''}
+
+                    ${productosVendidos && productosVendidos.length > 0 ? `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Productos Vendidos (${productosVendidos.length})</h4>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <th style="text-align: left; padding: 8px;">Producto</th>
+                                    <th style="text-align: right; padding: 8px;">Cantidad</th>
+                                    <th style="text-align: right; padding: 8px;">Precio Unit.</th>
+                                    <th style="text-align: right; padding: 8px;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${productosVendidos.map(p => `
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 8px;">${p.nombre_producto}</td>
+                                        <td style="text-align: right; padding: 8px;">${p.cantidad}</td>
+                                        <td style="text-align: right; padding: 8px;">${parseFloat(p.precio_unitario).toFixed(2)} Bs</td>
+                                        <td style="text-align: right; padding: 8px;"><strong>${parseFloat(p.precio_total).toFixed(2)} Bs</strong></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ` : ''}
+
+                    ${transaccion.estado === 'cerrada' ? `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Información de Pago</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <p><strong>Métodos de Pago:</strong> ${transaccion.metodos_pago || 'No especificado'}</p>
+                            <p><strong>Entidades:</strong> ${transaccion.entidades_pago || 'No especificado'}</p>
+                            ${transaccion.numero_referencia ? `<p><strong>Número de Referencia:</strong> ${transaccion.numero_referencia}</p>` : ''}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+
+            document.getElementById('ver-transaccion-modal').classList.add('active');
         } catch (error) {
             console.error('Error al cargar transacción:', error);
             mostrarError('Error al cargar la transacción');
@@ -1356,6 +1461,10 @@
     // Cerrar modales
     function cerrarModalCerrar() {
         document.getElementById('cerrar-transaccion-modal').classList.remove('active');
+    }
+
+    function cerrarModalVer() {
+        document.getElementById('ver-transaccion-modal').classList.remove('active');
     }
 
     function cerrarModalEliminar() {

@@ -60,6 +60,12 @@
             const closeModal = document.getElementById('close-modal');
             if (closeModal) closeModal.onclick = cerrarModal;
             
+            const closeVerNominaModal = document.getElementById('close-ver-nomina-modal');
+            if (closeVerNominaModal) closeVerNominaModal.onclick = cerrarModalVer;
+            
+            const cerrarVerNomina = document.getElementById('cerrar-ver-nomina');
+            if (cerrarVerNomina) cerrarVerNomina.onclick = cerrarModalVer;
+            
             const closeDeleteModal = document.getElementById('close-delete-modal');
             if (closeDeleteModal) closeDeleteModal.onclick = cerrarModalEliminar;
             
@@ -88,9 +94,13 @@
             
             if (fechaInput) {
                 fechaInput.onchange = calcularNomina;
-                // Establecer fecha por defecto a hoy
-                const hoy = new Date();
-                fechaInput.value = hoy.toISOString().split('T')[0];
+                // Establecer fecha por defecto a hoy (zona horaria local)
+                if (window.obtenerFechaLocalInput) {
+                    fechaInput.value = window.obtenerFechaLocalInput();
+                } else {
+                    const hoy = new Date();
+                    fechaInput.value = hoy.toISOString().split('T')[0];
+                }
             }
 
             // Calcular cuando cambia el porcentaje
@@ -136,6 +146,15 @@
                 nominaModal.onclick = (e) => {
                     if (e.target === e.currentTarget) {
                         cerrarModal();
+                    }
+                };
+            }
+
+            const verNominaModal = document.getElementById('ver-nomina-modal');
+            if (verNominaModal) {
+                verNominaModal.onclick = (e) => {
+                    if (e.target === e.currentTarget) {
+                        cerrarModalVer();
                     }
                 };
             }
@@ -566,11 +585,15 @@
         document.getElementById('nomina-form').reset();
         document.getElementById('nomina-id').value = '';
         
-        // Establecer fecha por defecto a hoy
+        // Establecer fecha por defecto a hoy (zona horaria local)
         const fechaInput = document.getElementById('nomina-fecha');
         if (fechaInput) {
-            const hoy = new Date();
-            fechaInput.value = hoy.toISOString().split('T')[0];
+            if (window.obtenerFechaLocalInput) {
+                fechaInput.value = window.obtenerFechaLocalInput();
+            } else {
+                const hoy = new Date();
+                fechaInput.value = hoy.toISOString().split('T')[0];
+            }
         }
         
         limpiarCamposNomina();
@@ -679,30 +702,83 @@
             const subtotal = parseFloat(nomina.comisiones_bs || 0) + parseFloat(nomina.propina_bs || 0) - parseFloat(nomina.descuentos_consumos_bs || 0);
             const porcentaje = parseInt(nomina.porcentaje_pagado || 100);
             
-            let mensaje = `Nómina #${nomina.id}\n\n`;
-            mensaje += `Empleado: ${nomina.nombre_empleado}\n`;
-            mensaje += `Fecha de Pago: ${nomina.fecha_pago}\n\n`;
-            mensaje += `Comisiones:\n`;
-            mensaje += `  - Referencia: $${parseFloat(nomina.comisiones_referencia_en_dolares).toFixed(2)}\n`;
-            mensaje += `  - Bolívares: ${parseFloat(nomina.comisiones_bs).toFixed(2)} Bs\n\n`;
-            mensaje += `Propinas:\n`;
-            mensaje += `  - Referencia: $${parseFloat(nomina.propina_en_dolares || 0).toFixed(2)}\n`;
-            mensaje += `  - Bolívares: ${parseFloat(nomina.propina_bs || 0).toFixed(2)} Bs\n\n`;
-            mensaje += `Descuentos por Consumos: ${parseFloat(nomina.descuentos_consumos_bs).toFixed(2)} Bs\n\n`;
-            mensaje += `Subtotal: ${subtotal.toFixed(2)} Bs\n`;
-            mensaje += `Porcentaje Pagado: ${porcentaje}%\n\n`;
-            
-            if (consumos.length > 0) {
-                mensaje += `Consumos Descontados:\n`;
-                consumos.forEach(c => {
-                    mensaje += `  - ${c.nombre_producto} (${c.cantidad}): ${parseFloat(c.precio_total).toFixed(2)} Bs\n`;
-                });
-                mensaje += `\n`;
+            // Formatear fecha
+            let fechaPago = nomina.fecha_pago;
+            if (fechaPago.includes('-')) {
+                const [year, month, day] = fechaPago.split('-');
+                fechaPago = `${day}/${month}/${year}`;
             }
             
-            mensaje += `Total Pagado: ${parseFloat(nomina.total_pagado_bs).toFixed(2)} Bs\n`;
+            document.getElementById('ver-nomina-titulo').textContent = `Nómina #${nomina.id}`;
             
-            alert(mensaje);
+            const contenido = document.getElementById('ver-nomina-contenido');
+            contenido.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Información General</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <p><strong>Empleado:</strong> ${nomina.nombre_empleado}</p>
+                            <p><strong>Fecha de Pago:</strong> ${fechaPago}</p>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Comisiones</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <p><strong>Referencia:</strong> $${parseFloat(nomina.comisiones_referencia_en_dolares || 0).toFixed(2)}</p>
+                            <p><strong>Bolívares:</strong> ${parseFloat(nomina.comisiones_bs || 0).toFixed(2)} Bs</p>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Propinas</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <p><strong>Referencia:</strong> $${parseFloat(nomina.propina_en_dolares || 0).toFixed(2)}</p>
+                            <p><strong>Bolívares:</strong> ${parseFloat(nomina.propina_bs || 0).toFixed(2)} Bs</p>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Descuentos</h4>
+                        <p><strong>Descuentos por Consumos:</strong> ${parseFloat(nomina.descuentos_consumos_bs || 0).toFixed(2)} Bs</p>
+                    </div>
+
+                    ${consumos && consumos.length > 0 ? `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Consumos Descontados (${consumos.length})</h4>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <th style="text-align: left; padding: 8px;">Producto</th>
+                                    <th style="text-align: right; padding: 8px;">Cantidad</th>
+                                    <th style="text-align: right; padding: 8px;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${consumos.map(c => `
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 8px;">${c.nombre_producto}</td>
+                                        <td style="text-align: right; padding: 8px;">${c.cantidad}</td>
+                                        <td style="text-align: right; padding: 8px;">${parseFloat(c.precio_total).toFixed(2)} Bs</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ` : ''}
+
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Resumen de Pago</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <p><strong>Subtotal:</strong> ${subtotal.toFixed(2)} Bs</p>
+                            <p><strong>Porcentaje Pagado:</strong> ${porcentaje}%</p>
+                            <p style="grid-column: 1 / -1;"><strong>Total Pagado:</strong> <span style="font-size: 18px; font-weight: 600;">${parseFloat(nomina.total_pagado_bs || 0).toFixed(2)} Bs</span></p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('ver-nomina-modal').classList.add('active');
         } catch (error) {
             console.error('Error al cargar nómina:', error);
             mostrarError('Error al cargar la nómina');
@@ -752,6 +828,10 @@
         document.getElementById('nomina-modal').classList.remove('active');
         nominaEditando = null;
         limpiarCamposNomina();
+    }
+
+    function cerrarModalVer() {
+        document.getElementById('ver-nomina-modal').classList.remove('active');
     }
 
     function cerrarModalEliminar() {

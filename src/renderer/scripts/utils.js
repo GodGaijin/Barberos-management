@@ -1,3 +1,35 @@
+// Utilidades para formateo de números y fechas
+
+// Obtener fecha y hora local en formato DD/MM/YYYY HH:MM:SS (zona horaria local, no UTC)
+window.obtenerFechaHoraLocal = function() {
+    const ahora = new Date();
+    const dia = String(ahora.getDate()).padStart(2, '0');
+    const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+    const año = ahora.getFullYear();
+    const hora = String(ahora.getHours()).padStart(2, '0');
+    const minuto = String(ahora.getMinutes()).padStart(2, '0');
+    const segundo = String(ahora.getSeconds()).padStart(2, '0');
+    return `${dia}/${mes}/${año} ${hora}:${minuto}:${segundo}`;
+};
+
+// Obtener fecha local en formato DD/MM/YYYY
+window.obtenerFechaLocal = function() {
+    const ahora = new Date();
+    const dia = String(ahora.getDate()).padStart(2, '0');
+    const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+    const año = ahora.getFullYear();
+    return `${dia}/${mes}/${año}`;
+};
+
+// Obtener fecha local en formato YYYY-MM-DD (para inputs de tipo date)
+window.obtenerFechaLocalInput = function() {
+    const ahora = new Date();
+    const dia = String(ahora.getDate()).padStart(2, '0');
+    const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+    const año = ahora.getFullYear();
+    return `${año}-${mes}-${dia}`;
+};
+
 // Utilidades para formateo de números
 
 // Formatear número a 2 decimales con ceros a la izquierda

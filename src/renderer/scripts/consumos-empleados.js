@@ -86,7 +86,11 @@
             const fechaInput = document.getElementById('consumo-fecha');
             if (fechaInput) {
                 const hoy = new Date();
-                fechaInput.value = hoy.toISOString().split('T')[0];
+                if (window.obtenerFechaLocalInput) {
+                    fechaInput.value = window.obtenerFechaLocalInput();
+                } else {
+                    fechaInput.value = hoy.toISOString().split('T')[0];
+                }
             }
 
             // Búsqueda y filtros

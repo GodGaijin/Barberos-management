@@ -5,30 +5,55 @@
 
     // Función de inicialización
     window.initDashboard = function() {
-        if (initialized) {
-            console.log('Dashboard ya inicializado, recargando datos...');
-            cargarDashboard();
-            return;
-        }
-
         console.log('Inicializando Dashboard...');
         
-        // Event listeners
-        const refreshBtn = document.getElementById('refresh-dashboard');
-        if (refreshBtn) {
-            refreshBtn.addEventListener('click', cargarDashboard);
-        }
+        // Event listeners - usar setTimeout para asegurar que el DOM esté listo
+        setTimeout(() => {
+            const refreshBtn = document.getElementById('refresh-dashboard');
+            if (refreshBtn) {
+                refreshBtn.onclick = () => {
+                    console.log('Botón actualizar clickeado');
+                    cargarDashboard();
+                };
+            } else {
+                console.warn('Botón refresh-dashboard no encontrado');
+            }
 
-        // Navegación desde links
-        document.querySelectorAll('[data-page]').forEach(link => {
-            link.addEventListener('click', (e) => {
-                const page = link.getAttribute('data-page');
-                if (page && window.navigateToPage) {
-                    e.preventDefault();
-                    window.navigateToPage(page);
-                }
+            // Navegación desde links - usar delegación de eventos para elementos dinámicos
+            const pageContent = document.getElementById('page-content');
+            if (pageContent) {
+                pageContent.addEventListener('click', (e) => {
+                    // Buscar el elemento clickeado o su padre que tenga data-page
+                    let target = e.target;
+                    while (target && target !== pageContent) {
+                        if (target.hasAttribute && target.hasAttribute('data-page')) {
+                            const page = target.getAttribute('data-page');
+                            if (page && window.navigateToPage) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log('Navegando a:', page);
+                                window.navigateToPage(page);
+                                return;
+                            }
+                        }
+                        target = target.parentElement;
+                    }
+                });
+            }
+
+            // Navegación desde links estáticos
+            document.querySelectorAll('a[data-page]').forEach(link => {
+                link.onclick = (e) => {
+                    const page = link.getAttribute('data-page');
+                    if (page && window.navigateToPage) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Navegando a:', page);
+                        window.navigateToPage(page);
+                    }
+                };
             });
-        });
+        }, 100);
 
         // Cargar datos iniciales
         cargarDashboard();
@@ -65,12 +90,24 @@
     async function cargarEstadisticas() {
         try {
             const fechaHoy = obtenerFechaHoy();
+            
+            // Convertir fecha de DD/MM/YYYY a YYYY-MM-DD para comparación ISO
+            const [dia, mes, año] = fechaHoy.split('/');
+            const fechaISO = `${año}-${mes}-${dia}`;
 
-            // Ingresos del día
+            // Ingresos del día - buscar todas las transacciones cerradas del día actual
+            // La fecha puede estar en formato DD/MM/YYYY HH:MM:SS o ISO
             const transaccionesHoy = await window.electronAPI.dbQuery(
                 `SELECT total_en_bs FROM Transacciones 
-                 WHERE fecha_cierre = ? AND estado = 'cerrada'`,
-                [fechaHoy]
+                 WHERE estado = 'cerrada'
+                 AND (
+                     -- Si la fecha está en formato DD/MM/YYYY HH:MM:SS
+                     fecha_cierre LIKE ? || '%'
+                     OR
+                     -- Si la fecha está en formato ISO (YYYY-MM-DD)
+                     strftime('%Y-%m-%d', fecha_cierre) = ?
+                 )`,
+                [fechaHoy, fechaISO]
             );
             const ingresosHoy = transaccionesHoy.reduce((sum, t) => sum + (parseFloat(t.total_en_bs) || 0), 0);
             document.getElementById('ingresos-hoy').textContent = `Bs. ${ingresosHoy.toFixed(2)}`;
@@ -124,22 +161,15 @@
             }
 
             container.innerHTML = transacciones.map(t => {
-                const item = document.createElement('div');
-                item.className = 'dashboard-item';
-                item.style.cursor = 'pointer';
-                item.addEventListener('click', () => {
-                    if (window.navigateToPage) {
-                        window.navigateToPage('transacciones');
-                    }
-                });
-                item.innerHTML = `
-                    <div class="item-main">
-                        <span class="item-title">${t.cliente_nombre || 'Cliente Contado'}</span>
-                        <span class="item-date">${formatearFechaHora(t.fecha_apertura)}</span>
+                return `
+                    <div class="dashboard-item" data-page="transacciones" style="cursor: pointer;">
+                        <div class="item-main">
+                            <span class="item-title">${t.cliente_nombre || 'Cliente Contado'}</span>
+                            <span class="item-date">${formatearFechaHora(t.fecha_apertura)}</span>
+                        </div>
+                        <div class="item-amount">Bs. ${parseFloat(t.total_en_bs || 0).toFixed(2)}</div>
                     </div>
-                    <div class="item-amount">Bs. ${parseFloat(t.total_en_bs || 0).toFixed(2)}</div>
                 `;
-                return item.outerHTML;
             }).join('');
 
         } catch (error) {
@@ -222,22 +252,15 @@
                     'no_show': 'No se presentó'
                 }[c.estado] || c.estado;
 
-                const item = document.createElement('div');
-                item.className = 'dashboard-item';
-                item.style.cursor = 'pointer';
-                item.addEventListener('click', () => {
-                    if (window.navigateToPage) {
-                        window.navigateToPage('citas');
-                    }
-                });
-                item.innerHTML = `
-                    <div class="item-main">
-                        <span class="item-title">${c.cliente_nombre || 'Sin cliente'}</span>
-                        <span class="item-date">${formatearFechaHora(c.fecha_hora)}</span>
+                return `
+                    <div class="dashboard-item" data-page="citas" style="cursor: pointer;">
+                        <div class="item-main">
+                            <span class="item-title">${c.cliente_nombre || 'Sin cliente'}</span>
+                            <span class="item-date">${formatearFechaHora(c.fecha_hora)}</span>
+                        </div>
+                        <span class="badge ${estadoClass}">${estadoText}</span>
                     </div>
-                    <span class="badge ${estadoClass}">${estadoText}</span>
                 `;
-                return item.outerHTML;
             }).join('');
 
         } catch (error) {
@@ -275,25 +298,18 @@
             }
 
             container.innerHTML = empleadosSinNomina.map(emp => {
-                const item = document.createElement('div');
-                item.className = 'dashboard-item warning-item';
-                item.style.cursor = 'pointer';
-                item.addEventListener('click', () => {
-                    if (window.navigateToPage) {
-                        window.navigateToPage('nominas');
-                    }
-                });
-                item.innerHTML = `
-                    <div class="item-main">
-                        <span class="item-title">⚠️ ${emp.nombre_empleado}</span>
-                        <span class="item-subtitle">Sin nómina pagada hoy</span>
-                    </div>
-                    <div class="item-details">
-                        <span>Servicios: Bs. ${parseFloat(emp.total_servicios || 0).toFixed(2)}</span>
-                        <span>Consumos: Bs. ${parseFloat(emp.total_consumos || 0).toFixed(2)}</span>
+                return `
+                    <div class="dashboard-item warning-item" data-page="nominas" style="cursor: pointer;">
+                        <div class="item-main">
+                            <span class="item-title">⚠️ ${emp.nombre_empleado}</span>
+                            <span class="item-subtitle">Sin nómina pagada hoy</span>
+                        </div>
+                        <div class="item-details">
+                            <span>Servicios: Bs. ${parseFloat(emp.total_servicios || 0).toFixed(2)}</span>
+                            <span>Consumos: Bs. ${parseFloat(emp.total_consumos || 0).toFixed(2)}</span>
+                        </div>
                     </div>
                 `;
-                return item.outerHTML;
             }).join('');
 
         } catch (error) {

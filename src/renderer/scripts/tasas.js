@@ -290,7 +290,8 @@
             console.log('Estableciendo tasa de hoy...');
             const hoy = new Date();
             const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
-            const fechaHoyISO = hoy.toISOString().split('T')[0]; // Formato YYYY-MM-DD para input date
+            // Usar función auxiliar para obtener fecha local en formato YYYY-MM-DD
+            const fechaHoyISO = window.obtenerFechaLocalInput ? window.obtenerFechaLocalInput() : hoy.toISOString().split('T')[0];
             
             console.log('Buscando tasa para fecha:', fechaHoy);
             // Verificar si ya existe una tasa para hoy

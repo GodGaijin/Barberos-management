@@ -180,6 +180,22 @@
     </div>
 </div>
 
+<!-- Modal para ver detalles de transacción -->
+<div id="ver-transaccion-modal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3 id="ver-transaccion-titulo">Detalles de la Transacción</h3>
+            <button class="modal-close" id="close-ver-transaccion-modal">&times;</button>
+        </div>
+        <div id="ver-transaccion-contenido" style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+            <!-- El contenido se llenará dinámicamente -->
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cerrar-ver-transaccion">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 <!-- Modal de confirmación para eliminar -->
 <div id="delete-modal" class="modal">
     <div class="modal-content modal-small">

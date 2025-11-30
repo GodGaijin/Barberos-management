@@ -243,11 +243,15 @@
     function abrirModalGenerar() {
         document.getElementById('reporte-form').reset();
         
-        // Establecer fecha por defecto a hoy
+        // Establecer fecha por defecto a hoy (zona horaria local)
         const fechaInput = document.getElementById('reporte-fecha');
         if (fechaInput) {
-            const hoy = new Date();
-            fechaInput.value = hoy.toISOString().split('T')[0];
+            if (window.obtenerFechaLocalInput) {
+                fechaInput.value = window.obtenerFechaLocalInput();
+            } else {
+                const hoy = new Date();
+                fechaInput.value = hoy.toISOString().split('T')[0];
+            }
         }
         
         document.getElementById('reporte-modal').classList.add('active');
@@ -401,8 +405,8 @@
                 }))
             });
 
-            // Fecha de creación
-            const fechaCreacion = new Date().toISOString();
+            // Fecha de creación - usar zona horaria local en formato DD/MM/YYYY HH:MM:SS
+            const fechaCreacion = window.obtenerFechaHoraLocal ? window.obtenerFechaHoraLocal() : new Date().toISOString();
 
             // Guardar reporte
             await window.electronAPI.dbRun(
