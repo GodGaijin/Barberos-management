@@ -312,22 +312,58 @@ function getPageTitle(page) {
 // Sistema de actualizaciones
 function initUpdater() {
     if (!window.updaterAPI) {
-        console.warn('updaterAPI no está disponible');
+        console.warn('⚠️ updaterAPI no está disponible');
         return;
     }
     
+    console.log('✅ Sistema de actualizaciones inicializado');
+    
     // Escuchar eventos de actualizaciones
     window.updaterAPI.onUpdateAvailable((info) => {
+        console.log('📦 Evento: Actualización disponible recibido:', info);
         showUpdateNotification(info, 'available');
     });
     
     window.updaterAPI.onDownloadProgress((progress) => {
+        console.log('📥 Progreso de descarga:', progress.percent + '%');
         updateDownloadProgress(progress);
     });
     
     window.updaterAPI.onUpdateDownloaded((info) => {
+        console.log('✅ Evento: Actualización descargada recibido:', info);
         showUpdateNotification(info, 'downloaded');
     });
+    
+    // Función global para verificar manualmente desde la consola
+    window.verificarActualizacionesManual = async function() {
+        console.log('🔍 Verificación manual de actualizaciones iniciada...');
+        if (!window.updaterAPI) {
+            console.error('❌ updaterAPI no está disponible');
+            if (typeof window.mostrarNotificacion === 'function') {
+                window.mostrarNotificacion('Error: Sistema de actualizaciones no disponible', 'error', 5000);
+            }
+            return;
+        }
+        
+        try {
+            const result = await window.updaterAPI.checkForUpdates();
+            console.log('✅ Resultado de verificación:', result);
+            if (typeof window.mostrarNotificacion === 'function') {
+                if (result && result.success) {
+                    window.mostrarNotificacion('Verificación completada. Revisa la consola para detalles.', 'info', 3000);
+                } else {
+                    window.mostrarNotificacion('Error al verificar: ' + (result?.error || 'Desconocido'), 'error', 5000);
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error al verificar actualizaciones:', error);
+            if (typeof window.mostrarNotificacion === 'function') {
+                window.mostrarNotificacion('Error al verificar: ' + error.message, 'error', 5000);
+            }
+        }
+    };
+    
+    console.log('💡 Para verificar actualizaciones manualmente, ejecuta: window.verificarActualizacionesManual()');
 }
 
 // Mostrar notificación de actualización

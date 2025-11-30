@@ -231,28 +231,70 @@ ipcMain.on('fix-focus', () => {
   }
 });
 
+// Función para verificar actualizaciones
+function verificarActualizaciones() {
+  const esModoDesarrollo = process.argv.includes('--dev') || process.env.NODE_ENV === 'development';
+  
+  console.log('🔍 Estado de verificación de actualizaciones:');
+  console.log('  - Modo desarrollo:', esModoDesarrollo);
+  console.log('  - mainWindow existe:', !!mainWindow);
+  console.log('  - Versión actual:', app.getVersion());
+  
+  if (esModoDesarrollo) {
+    console.log('⚠️ Modo desarrollo detectado, no se verificarán actualizaciones');
+    console.log('💡 Para probar actualizaciones, ejecuta la versión compilada');
+    return;
+  }
+  
+  if (!mainWindow) {
+    console.log('⚠️ mainWindow no está disponible aún, reintentando...');
+    setTimeout(verificarActualizaciones, 1000);
+    return;
+  }
+  
+  console.log('🚀 Iniciando verificación de actualizaciones...');
+  console.log('📦 Versión actual de la app:', app.getVersion());
+  console.log('🔗 Repositorio configurado: GodGaijin/Barberos-management');
+  
+  autoUpdater.checkForUpdates().catch(err => {
+    console.error('❌ Error al verificar actualizaciones:', err);
+    console.error('📋 Mensaje:', err.message);
+    if (err.stack) {
+      console.error('📋 Stack:', err.stack);
+    }
+  });
+}
+
 // Cuando Electron esté listo, crear la ventana
 app.whenReady().then(() => {
   initializeDatabase();
   createWindow();
   
   // Verificar actualizaciones después de que la ventana esté lista (solo en producción)
-  if (mainWindow && !process.argv.includes('--dev')) {
+  if (mainWindow) {
+    // Usar el evento did-finish-load para asegurar que la ventana esté completamente cargada
     mainWindow.webContents.once('did-finish-load', () => {
+      console.log('✅ Ventana cargada completamente, programando verificación de actualizaciones...');
       // Verificar actualizaciones al iniciar con un pequeño delay
-      setTimeout(() => {
-        console.log('🚀 Iniciando verificación de actualizaciones...');
-        console.log('📦 Versión actual de la app:', app.getVersion());
-        console.log('🔗 Repositorio configurado: GodGaijin/Barberos-management');
-        autoUpdater.checkForUpdates().catch(err => {
-          console.error('❌ Error al verificar actualizaciones:', err);
-          console.error('📋 Mensaje:', err.message);
-        });
-      }, 3000);
+      setTimeout(verificarActualizaciones, 3000);
     });
+    
+    // También intentar si el evento ya se disparó
+    if (mainWindow.webContents.isLoading() === false) {
+      console.log('✅ Ventana ya está cargada, programando verificación...');
+      setTimeout(verificarActualizaciones, 3000);
+    }
   } else {
-    console.log('⚠️ Modo desarrollo detectado (--dev), no se verificarán actualizaciones');
-    console.log('💡 Para probar actualizaciones, ejecuta la versión compilada sin --dev');
+    console.log('⚠️ mainWindow no está disponible, reintentando en 1 segundo...');
+    setTimeout(() => {
+      if (mainWindow) {
+        mainWindow.webContents.once('did-finish-load', () => {
+          setTimeout(verificarActualizaciones, 3000);
+        });
+      } else {
+        verificarActualizaciones();
+      }
+    }, 1000);
   }
 
   app.on('activate', () => {
