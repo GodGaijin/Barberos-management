@@ -102,3 +102,7 @@ coverage/
 *.backup
 *~
 
+# Documentation files (except README)
+*.md
+!README.md
+
