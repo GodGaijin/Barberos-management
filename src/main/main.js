@@ -143,24 +143,42 @@ ipcMain.handle('auth-login', async (event, username, password) => {
 autoUpdater.autoDownload = false; // No descargar automáticamente, pedir confirmación
 autoUpdater.autoInstallOnAppQuit = false; // No instalar automáticamente al cerrar
 
+// Configurar provider y repositorio explícitamente
+// Esto es necesario para que electron-updater sepa dónde buscar las actualizaciones
+try {
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'GodGaijin',
+    repo: 'Barberos-management'
+  });
+  console.log('✅ Auto-updater configurado para: GodGaijin/Barberos-management');
+} catch (error) {
+  console.error('❌ Error al configurar auto-updater:', error);
+}
+
 // Eventos del auto-updater
 autoUpdater.on('checking-for-update', () => {
-  console.log('Buscando actualizaciones...');
+  console.log('🔍 Buscando actualizaciones...');
 });
 
 autoUpdater.on('update-available', (info) => {
-  console.log('Actualización disponible:', info.version);
+  console.log('✅ Actualización disponible:', info.version);
+  console.log('📦 Información completa:', JSON.stringify(info, null, 2));
   if (mainWindow) {
     mainWindow.webContents.send('update-available', info);
   }
 });
 
 autoUpdater.on('update-not-available', (info) => {
-  console.log('No hay actualizaciones disponibles');
+  console.log('ℹ️ No hay actualizaciones disponibles');
+  console.log('📋 Versión actual instalada:', info.version || app.getVersion());
+  console.log('📋 Versión más reciente en GitHub:', info.version || 'N/A');
 });
 
 autoUpdater.on('error', (err) => {
-  console.error('Error en auto-updater:', err);
+  console.error('❌ Error en auto-updater:', err);
+  console.error('📋 Detalles del error:', err.message);
+  console.error('📋 Stack:', err.stack);
   if (mainWindow) {
     mainWindow.webContents.send('update-error', err.message);
   }
@@ -223,9 +241,18 @@ app.whenReady().then(() => {
     mainWindow.webContents.once('did-finish-load', () => {
       // Verificar actualizaciones al iniciar con un pequeño delay
       setTimeout(() => {
-        autoUpdater.checkForUpdates();
+        console.log('🚀 Iniciando verificación de actualizaciones...');
+        console.log('📦 Versión actual de la app:', app.getVersion());
+        console.log('🔗 Repositorio configurado: GodGaijin/Barberos-management');
+        autoUpdater.checkForUpdates().catch(err => {
+          console.error('❌ Error al verificar actualizaciones:', err);
+          console.error('📋 Mensaje:', err.message);
+        });
       }, 3000);
     });
+  } else {
+    console.log('⚠️ Modo desarrollo detectado (--dev), no se verificarán actualizaciones');
+    console.log('💡 Para probar actualizaciones, ejecuta la versión compilada sin --dev');
   }
 
   app.on('activate', () => {
