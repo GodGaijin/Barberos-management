@@ -146,14 +146,41 @@ autoUpdater.autoInstallOnAppQuit = false; // No instalar automáticamente al cer
 // Configurar provider y repositorio explícitamente
 // Esto es necesario para que electron-updater sepa dónde buscar las actualizaciones
 try {
-  autoUpdater.setFeedURL({
+  const feedURL = {
     provider: 'github',
     owner: 'GodGaijin',
     repo: 'Barberos-management'
-  });
-  console.log('✅ Auto-updater configurado para: GodGaijin/Barberos-management');
+  };
+  
+  // Para repositorios privados, necesitamos un token de GitHub
+  // El token se puede obtener de: https://github.com/settings/tokens
+  // Necesita permisos: repo (para acceder a repositorios privados)
+  const githubToken = process.env.GITHUB_TOKEN;
+  
+  if (githubToken) {
+    feedURL.token = githubToken;
+    console.log('✅ Token de GitHub configurado (repositorio privado)');
+  } else {
+    console.log('⚠️ No se encontró GITHUB_TOKEN en variables de entorno');
+    console.log('💡 Para repositorios privados, necesitas configurar un token:');
+    console.log('   1. Ve a https://github.com/settings/tokens');
+    console.log('   2. Genera un token con permisos "repo"');
+    console.log('   3. Configura la variable de entorno GITHUB_TOKEN');
+    console.log('   O haz el repositorio público (más simple)');
+  }
+  
+  // Configurar el feed URL
+  autoUpdater.setFeedURL(feedURL);
+  console.log('✅ Auto-updater configurado para:', { ...feedURL, token: githubToken ? '***' : 'no configurado' });
+  console.log('🔗 URL esperada: https://github.com/GodGaijin/Barberos-management/releases/latest/download/latest.yml');
+  
+  // Verificar que la configuración se aplicó correctamente
+  const currentFeedURL = autoUpdater.getFeedURL();
+  console.log('📋 Feed URL configurado:', currentFeedURL ? 'OK' : 'ERROR');
+  
 } catch (error) {
   console.error('❌ Error al configurar auto-updater:', error);
+  console.error('📋 Detalles:', error.message);
 }
 
 // Eventos del auto-updater
@@ -171,8 +198,10 @@ autoUpdater.on('update-available', (info) => {
 
 autoUpdater.on('update-not-available', (info) => {
   console.log('ℹ️ No hay actualizaciones disponibles');
-  console.log('📋 Versión actual instalada:', info.version || app.getVersion());
-  console.log('📋 Versión más reciente en GitHub:', info.version || 'N/A');
+  console.log('📋 Versión actual instalada:', app.getVersion());
+  console.log('📋 Información recibida:', JSON.stringify(info, null, 2));
+  console.log('💡 Esto significa que la versión instalada es igual o mayor que la del release');
+  console.log('💡 Para probar, instala una versión anterior (ej: 1.0.5) y luego verifica');
 });
 
 autoUpdater.on('error', (err) => {
@@ -200,10 +229,40 @@ autoUpdater.on('update-downloaded', (info) => {
 // IPC handlers para actualizaciones
 ipcMain.handle('check-for-updates', async () => {
   try {
+    console.log('📡 IPC: check-for-updates llamado');
+    console.log('🔍 Verificando configuración del autoUpdater...');
+    
+    const feedURL = autoUpdater.getFeedURL();
+    console.log('  - Feed URL:', feedURL);
+    console.log('  - Provider:', feedURL?.provider || 'github');
+    console.log('  - Owner:', feedURL?.owner || 'GodGaijin');
+    console.log('  - Repo:', feedURL?.repo || 'Barberos-management');
+    
+    // Verificar que el repositorio sea accesible
+    const testURL = `https://github.com/${feedURL?.owner || 'GodGaijin'}/${feedURL?.repo || 'Barberos-management'}/releases/latest/download/latest.yml`;
+    console.log('🔗 URL de prueba:', testURL);
+    
     const result = await autoUpdater.checkForUpdates();
+    console.log('✅ Resultado de checkForUpdates:', JSON.stringify(result, null, 2));
     return { success: true, result };
   } catch (error) {
-    console.error('Error al verificar actualizaciones:', error);
+    console.error('❌ Error al verificar actualizaciones:', error);
+    console.error('📋 Tipo de error:', error.constructor.name);
+    console.error('📋 Mensaje:', error.message);
+    
+    // Si es un error 404, dar sugerencias específicas
+    if (error.message && error.message.includes('404')) {
+      console.error('💡 Error 404 detectado. Posibles causas:');
+      console.error('   1. El repositorio es privado (necesita token GITHUB_TOKEN)');
+      console.error('   2. El nombre del repositorio está incorrecto');
+      console.error('   3. El repositorio no tiene releases publicados');
+      console.error('   4. El repositorio no existe o no es accesible');
+      console.error('💡 Verifica que el repositorio sea público y tenga al menos un release publicado');
+    }
+    
+    if (error.stack) {
+      console.error('📋 Stack:', error.stack);
+    }
     return { success: false, error: error.message };
   }
 });

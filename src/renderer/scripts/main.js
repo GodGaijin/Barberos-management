@@ -337,6 +337,8 @@ function initUpdater() {
     // Función global para verificar manualmente desde la consola
     window.verificarActualizacionesManual = async function() {
         console.log('🔍 Verificación manual de actualizaciones iniciada...');
+        console.log('📦 Versión actual según package.json:', '1.0.6'); // Esto debería venir del package.json
+        
         if (!window.updaterAPI) {
             console.error('❌ updaterAPI no está disponible');
             if (typeof window.mostrarNotificacion === 'function') {
@@ -345,18 +347,29 @@ function initUpdater() {
             return;
         }
         
+        console.log('✅ updaterAPI disponible, iniciando verificación...');
+        
         try {
             const result = await window.updaterAPI.checkForUpdates();
-            console.log('✅ Resultado de verificación:', result);
+            console.log('📋 Resultado completo de verificación:', result);
+            console.log('📋 Resultado parseado:', JSON.stringify(result, null, 2));
+            
             if (typeof window.mostrarNotificacion === 'function') {
                 if (result && result.success) {
                     window.mostrarNotificacion('Verificación completada. Revisa la consola para detalles.', 'info', 3000);
                 } else {
-                    window.mostrarNotificacion('Error al verificar: ' + (result?.error || 'Desconocido'), 'error', 5000);
+                    const errorMsg = result?.error || 'Desconocido';
+                    console.error('❌ Error en resultado:', errorMsg);
+                    window.mostrarNotificacion('Error al verificar: ' + errorMsg, 'error', 5000);
                 }
             }
         } catch (error) {
-            console.error('❌ Error al verificar actualizaciones:', error);
+            console.error('❌ Excepción al verificar actualizaciones:', error);
+            console.error('📋 Tipo:', error.constructor.name);
+            console.error('📋 Mensaje:', error.message);
+            if (error.stack) {
+                console.error('📋 Stack:', error.stack);
+            }
             if (typeof window.mostrarNotificacion === 'function') {
                 window.mostrarNotificacion('Error al verificar: ' + error.message, 'error', 5000);
             }
