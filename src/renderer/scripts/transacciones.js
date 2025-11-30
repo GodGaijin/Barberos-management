@@ -309,15 +309,36 @@
             
             // Formatear fechas
             let fechaApertura = transaccion.fecha_apertura;
-            if (fechaApertura.includes('-')) {
-                const [year, month, day] = fechaApertura.split('-');
-                fechaApertura = `${day}/${month}/${year}`;
+            // Si viene en formato ISO (YYYY-MM-DD o con T)
+            if (fechaApertura && fechaApertura.includes('-')) {
+                if (fechaApertura.includes('T')) {
+                    // Formato ISO completo: 2025-11-29T10:30:00.000Z
+                    const fecha = new Date(fechaApertura);
+                    const dia = String(fecha.getDate()).padStart(2, '0');
+                    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+                    const año = fecha.getFullYear();
+                    fechaApertura = `${dia}/${mes}/${año}`;
+                } else {
+                    // Formato YYYY-MM-DD
+                    const [year, month, day] = fechaApertura.split('-');
+                    fechaApertura = `${day}/${month}/${year}`;
+                }
             }
             
             let fechaCierre = transaccion.fecha_cierre || '-';
             if (fechaCierre !== '-' && fechaCierre.includes('-')) {
-                const [year, month, day] = fechaCierre.split('-');
-                fechaCierre = `${day}/${month}/${year}`;
+                if (fechaCierre.includes('T')) {
+                    // Formato ISO completo
+                    const fecha = new Date(fechaCierre);
+                    const dia = String(fecha.getDate()).padStart(2, '0');
+                    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+                    const año = fecha.getFullYear();
+                    fechaCierre = `${dia}/${mes}/${año}`;
+                } else {
+                    // Formato YYYY-MM-DD
+                    const [year, month, day] = fechaCierre.split('-');
+                    fechaCierre = `${day}/${month}/${year}`;
+                }
             }
             
             return `
@@ -438,8 +459,8 @@
             if (typeof formatearInputPrecio === 'function') {
                 formatearInputPrecio(propinaInput);
             }
-            propinaInput.oninput = () => {
-                calcularPropinaDolares(filaId);
+            propinaInput.oninput = async () => {
+                await calcularPropinaDolares(filaId);
                 actualizarTotalGeneral();
             };
         }
@@ -481,6 +502,48 @@
         }
         
         actualizarTotalGeneral();
+    }
+
+    // Calcular propina en dólares basándose en la tasa del día
+    async function calcularPropinaDolares(filaId) {
+        const fila = document.getElementById(filaId);
+        if (!fila) return;
+        
+        const propinaInput = fila.querySelector('.servicio-propina');
+        const propinaDolaresInput = fila.querySelector('.servicio-propina-dolares');
+        
+        if (!propinaInput || !propinaDolaresInput) return;
+        
+        const propinaBs = parseFloat(propinaInput.value.replace(/[^\d.]/g, '')) || 0;
+        
+        if (propinaBs === 0) {
+            propinaDolaresInput.value = '0.00';
+            return;
+        }
+        
+        try {
+            // Obtener fecha de hoy
+            const hoy = new Date();
+            const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+            
+            // Obtener tasa del día
+            const tasaHoy = await window.electronAPI.dbGet(
+                'SELECT * FROM TasasCambio WHERE fecha = ?',
+                [fechaHoy]
+            );
+            
+            if (!tasaHoy) {
+                propinaDolaresInput.value = '0.00';
+                return;
+            }
+            
+            // Calcular propina en dólares
+            const propinaDolares = propinaBs / tasaHoy.tasa_bs_por_dolar;
+            propinaDolaresInput.value = propinaDolares.toFixed(2);
+        } catch (error) {
+            console.error('Error al calcular propina en dólares:', error);
+            propinaDolaresInput.value = '0.00';
+        }
     }
 
     // Agregar una nueva fila de producto
@@ -844,8 +907,15 @@
         if (esEdicion && transaccionEditando) {
             fechaAperturaStr = transaccionEditando.fecha_apertura;
         } else {
+            // Usar formato DD/MM/YYYY HH:MM:SS para consistencia
             const fechaApertura = new Date();
-            fechaAperturaStr = fechaApertura.toISOString();
+            const dia = String(fechaApertura.getDate()).padStart(2, '0');
+            const mes = String(fechaApertura.getMonth() + 1).padStart(2, '0');
+            const año = fechaApertura.getFullYear();
+            const hora = String(fechaApertura.getHours()).padStart(2, '0');
+            const minuto = String(fechaApertura.getMinutes()).padStart(2, '0');
+            const segundo = String(fechaApertura.getSeconds()).padStart(2, '0');
+            fechaAperturaStr = `${dia}/${mes}/${año} ${hora}:${minuto}:${segundo}`;
         }
 
         try {
@@ -1015,9 +1085,15 @@
         const metodosPagoStr = metodosSeleccionados.join(',');
         const entidadesPagoStr = entidadesSeleccionadas.join(',');
 
-        // Fecha de cierre
+        // Fecha de cierre - usar formato DD/MM/YYYY HH:MM:SS
         const fechaCierre = new Date();
-        const fechaCierreStr = fechaCierre.toISOString();
+        const dia = String(fechaCierre.getDate()).padStart(2, '0');
+        const mes = String(fechaCierre.getMonth() + 1).padStart(2, '0');
+        const año = fechaCierre.getFullYear();
+        const hora = String(fechaCierre.getHours()).padStart(2, '0');
+        const minuto = String(fechaCierre.getMinutes()).padStart(2, '0');
+        const segundo = String(fechaCierre.getSeconds()).padStart(2, '0');
+        const fechaCierreStr = `${dia}/${mes}/${año} ${hora}:${minuto}:${segundo}`;
 
         try {
             await window.electronAPI.dbRun(
@@ -1124,12 +1200,12 @@
                             formatearInputPrecio(propinaInput);
                         }
                         // Configurar evento para calcular propina en dólares
-                        propinaInput.oninput = () => {
-                            calcularPropinaDolares(filaId);
+                        propinaInput.oninput = async () => {
+                            await calcularPropinaDolares(filaId);
                             actualizarTotalGeneral();
                         };
                         // Calcular propina en dólares con el valor actual
-                        calcularPropinaDolares(filaId);
+                        await calcularPropinaDolares(filaId);
                     }
                     
                     // Calcular precio y propina en dólares si es necesario

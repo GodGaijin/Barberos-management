@@ -68,10 +68,35 @@ async function checkAuth() {
     // Solo mostrar login si no hay sesión activa en localStorage
     const sessionActive = localStorage.getItem('sessionActive');
     if (sessionActive === 'true') {
+        // Verificar si cambió la fecha
+        verificarCambioFecha();
         showMainScreen();
     } else {
         showLoginScreen();
     }
+}
+
+// Verificar si cambió la fecha desde la última sesión
+function verificarCambioFecha() {
+    const hoy = new Date();
+    const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+    
+    const ultimaFecha = localStorage.getItem('ultimaFechaSesion');
+    
+    if (ultimaFecha && ultimaFecha !== fechaHoy) {
+        // La fecha cambió, es un nuevo día
+        console.log('Nuevo día detectado:', fechaHoy);
+        // Aquí puedes agregar lógica adicional si es necesario
+    } else if (!ultimaFecha) {
+        // Primera vez que se inicia, guardar la fecha
+        console.log('Primera sesión del día:', fechaHoy);
+    } else {
+        // Mismo día, no es un nuevo día
+        console.log('Misma fecha, no es un nuevo día:', fechaHoy);
+    }
+    
+    // Actualizar la fecha de sesión
+    localStorage.setItem('ultimaFechaSesion', fechaHoy);
 }
 
 // Mostrar pantalla de login
@@ -109,6 +134,8 @@ async function handleLogin(e) {
         
         // Login exitoso
         localStorage.setItem('sessionActive', 'true');
+        // Verificar cambio de fecha al iniciar sesión
+        verificarCambioFecha();
         showMainScreen();
         // Inicializar actualizaciones después del login
         initUpdater();
