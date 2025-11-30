@@ -82,7 +82,8 @@ CREATE TABLE IF NOT EXISTS Nominas (
     propina_en_dolares REAL NOT NULL DEFAULT 0,
     propina_bs REAL NOT NULL DEFAULT 0,
     descuentos_consumos_bs REAL NOT NULL DEFAULT 0, -- Total descontado por consumos de productos
-    total_pagado_bs REAL NOT NULL, -- Total final a pagar (comisiones + propina - descuentos)
+    total_pagado_bs REAL NOT NULL, -- Total final a pagar (comisiones + propina - descuentos) * (porcentaje_pagado / 100)
+    porcentaje_pagado INTEGER NOT NULL DEFAULT 100, -- Porcentaje del total que se le paga al empleado (1-100)
     fecha_pago TEXT NOT NULL, -- Formato: "05/09/2024" - Se guarda automáticamente con fecha local del sistema
     FOREIGN KEY (id_empleado) REFERENCES Empleados(id) ON DELETE CASCADE
 );

@@ -241,6 +241,27 @@ class DB {
           
           console.log('Tabla Nominas actualizada exitosamente');
         }
+        
+        // Verificar si falta la columna porcentaje_pagado
+        if (!sql.includes('porcentaje_pagado')) {
+          console.log('Actualizando tabla Nominas para incluir porcentaje_pagado...');
+          
+          try {
+            this.db.exec('ALTER TABLE Nominas ADD COLUMN porcentaje_pagado INTEGER NOT NULL DEFAULT 100;');
+            console.log('Columna porcentaje_pagado agregada');
+            
+            // Actualizar registros existentes para establecer porcentaje en 100%
+            this.db.exec(`
+              UPDATE Nominas 
+              SET porcentaje_pagado = 100
+              WHERE porcentaje_pagado IS NULL;
+            `);
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar porcentaje_pagado:', e);
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error al migrar tabla Nominas:', error);

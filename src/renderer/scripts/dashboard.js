@@ -148,6 +148,33 @@
         }
     }
 
+    // Función auxiliar para parsear fecha en cualquier formato
+    function parsearFecha(fechaStr) {
+        if (!fechaStr) return null;
+        
+        try {
+            // Si está en formato DD/MM/YYYY HH:MM:SS o DD/MM/YYYY HH:MM
+            if (fechaStr.includes('/')) {
+                const partes = fechaStr.split(' ');
+                const fechaParte = partes[0]; // DD/MM/YYYY
+                const horaParte = partes[1] || '00:00:00'; // HH:MM:SS o HH:MM
+                
+                const [dia, mes, año] = fechaParte.split('/');
+                const [hora, minuto, segundo = '00'] = horaParte.split(':');
+                
+                // Crear fecha en formato ISO para poder parsearla
+                const fechaISO = `${año}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}T${hora.padStart(2, '0')}:${minuto.padStart(2, '0')}:${segundo.padStart(2, '0')}`;
+                return new Date(fechaISO);
+            } else {
+                // Formato ISO o estándar
+                return new Date(fechaStr);
+            }
+        } catch (e) {
+            console.error('Error al parsear fecha:', fechaStr, e);
+            return null;
+        }
+    }
+
     // Cargar citas próximas
     async function cargarCitasProximas() {
         const container = document.getElementById('citas-list');
@@ -164,16 +191,19 @@
                  ORDER BY c.fecha_hora ASC`
             );
 
-            // Filtrar citas futuras
+            // Filtrar citas futuras usando la función de parseo
             const ahora = new Date();
             const citas = todasCitas
                 .filter(c => {
-                    try {
-                        const fechaCita = new Date(c.fecha_hora);
-                        return fechaCita >= ahora;
-                    } catch (e) {
-                        return false;
-                    }
+                    const fechaCita = parsearFecha(c.fecha_hora);
+                    return fechaCita && fechaCita >= ahora;
+                })
+                .sort((a, b) => {
+                    // Ordenar por fecha
+                    const fechaA = parsearFecha(a.fecha_hora);
+                    const fechaB = parsearFecha(b.fecha_hora);
+                    if (!fechaA || !fechaB) return 0;
+                    return fechaA - fechaB;
                 })
                 .slice(0, 5);
 
@@ -356,7 +386,11 @@
     function formatearFechaHora(fechaHora) {
         if (!fechaHora) return '';
         try {
-            const d = new Date(fechaHora);
+            // Usar la función parsearFecha para manejar ambos formatos
+            const d = parsearFecha(fechaHora);
+            if (!d || isNaN(d.getTime())) {
+                return fechaHora;
+            }
             const dia = String(d.getDate()).padStart(2, '0');
             const mes = String(d.getMonth() + 1).padStart(2, '0');
             const año = d.getFullYear();

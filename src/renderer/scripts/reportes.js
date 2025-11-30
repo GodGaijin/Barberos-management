@@ -305,17 +305,25 @@
             `, [fechaFormato]);
 
             // Obtener transacciones cerradas ese día
+            // La fecha puede estar en formato DD/MM/YYYY HH:MM:SS o ISO
             const transacciones = await window.electronAPI.dbQuery(`
                 SELECT 
                     t.*,
                     c.nombre || ' ' || c.apellido as nombre_cliente
                 FROM Transacciones t
                 JOIN Clientes c ON t.id_cliente = c.id
-                WHERE DATE(t.fecha_cierre) = DATE(?)
-                AND t.estado = 'cerrada'
-            `, [fechaInput]);
+                WHERE t.estado = 'cerrada'
+                AND (
+                    -- Si la fecha está en formato DD/MM/YYYY HH:MM:SS
+                    t.fecha_cierre LIKE ? || '%'
+                    OR
+                    -- Si la fecha está en formato ISO (YYYY-MM-DD)
+                    strftime('%Y-%m-%d', t.fecha_cierre) = ?
+                )
+            `, [fechaFormato, fechaInput]);
 
             // Obtener servicios realizados ese día
+            // La fecha puede estar en formato DD/MM/YYYY HH:MM:SS o ISO
             const servicios = await window.electronAPI.dbQuery(`
                 SELECT 
                     sr.*,
@@ -324,19 +332,32 @@
                 FROM ServiciosRealizados sr
                 JOIN Servicios s ON sr.id_servicio = s.id
                 JOIN Empleados e ON sr.id_empleado = e.id
-                WHERE strftime('%d/%m/%Y', sr.fecha) = ?
-                AND sr.estado = 'completado'
-            `, [fechaFormato]);
+                WHERE sr.estado = 'completado'
+                AND (
+                    -- Si la fecha está en formato DD/MM/YYYY HH:MM:SS
+                    sr.fecha LIKE ? || '%'
+                    OR
+                    -- Si la fecha está en formato ISO (YYYY-MM-DD)
+                    strftime('%Y-%m-%d', sr.fecha) = ?
+                )
+            `, [fechaFormato, fechaInput]);
 
             // Obtener productos vendidos ese día
+            // La fecha puede estar en formato DD/MM/YYYY HH:MM:SS o ISO
             const productos = await window.electronAPI.dbQuery(`
                 SELECT 
                     pv.*,
                     p.nombre as nombre_producto
                 FROM ProductosVendidos pv
                 JOIN Productos p ON pv.id_producto = p.id
-                WHERE strftime('%d/%m/%Y', pv.fecha) = ?
-            `, [fechaFormato]);
+                WHERE (
+                    -- Si la fecha está en formato DD/MM/YYYY HH:MM:SS
+                    pv.fecha LIKE ? || '%'
+                    OR
+                    -- Si la fecha está en formato ISO (YYYY-MM-DD)
+                    strftime('%Y-%m-%d', pv.fecha) = ?
+                )
+            `, [fechaFormato, fechaInput]);
 
             // Calcular totales
             const totalNominas = nominas.reduce((sum, n) => sum + parseFloat(n.total_pagado_bs || 0), 0);

@@ -93,6 +93,21 @@
                 fechaInput.value = hoy.toISOString().split('T')[0];
             }
 
+            // Calcular cuando cambia el porcentaje
+            const porcentajeInput = document.getElementById('nomina-porcentaje');
+            if (porcentajeInput) {
+                porcentajeInput.oninput = () => {
+                    // Validar que esté entre 1 y 100
+                    let valor = parseInt(porcentajeInput.value) || 100;
+                    if (valor < 1) valor = 1;
+                    if (valor > 100) valor = 100;
+                    if (valor !== parseInt(porcentajeInput.value)) {
+                        porcentajeInput.value = valor;
+                    }
+                    recalcularTotalConPorcentaje();
+                };
+            }
+
             // Búsqueda y filtros
             const searchNomina = document.getElementById('search-nomina');
             if (searchNomina) {
@@ -344,8 +359,11 @@
 
         try {
             // Obtener servicios realizados del empleado en esa fecha
-            // La fecha en ServiciosRealizados está en formato ISO (YYYY-MM-DD HH:MM:SS)
-            // Necesitamos comparar solo la parte de fecha
+            // La fecha en ServiciosRealizados puede estar en formato DD/MM/YYYY HH:MM:SS o ISO
+            // Convertir fechaInput (YYYY-MM-DD) a formato DD/MM/YYYY para comparar
+            const [year, month, day] = fechaInput.split('-');
+            const fechaFormatoComparar = `${day}/${month}/${year}`;
+            
             const servicios = await window.electronAPI.dbQuery(`
                 SELECT 
                     sr.*,
@@ -356,8 +374,14 @@
                 JOIN Transacciones t ON sr.id_transaccion = t.id
                 WHERE sr.id_empleado = ? 
                 AND sr.estado = 'completado'
-                AND strftime('%Y-%m-%d', sr.fecha) = ?
-            `, [idEmpleado, fechaInput]);
+                AND (
+                    -- Si la fecha está en formato DD/MM/YYYY HH:MM:SS
+                    sr.fecha LIKE ? || '%'
+                    OR
+                    -- Si la fecha está en formato ISO (YYYY-MM-DD)
+                    strftime('%Y-%m-%d', sr.fecha) = ?
+                )
+            `, [idEmpleado, fechaFormatoComparar, fechaInput]);
             
             // Obtener consumos pendientes del empleado
             const consumos = await window.electronAPI.dbQuery(`
@@ -456,8 +480,8 @@
             propinasDolares = propinasBs / tasaHoy.tasa_bs_por_dolar;
         }
 
-        // Calcular total
-        const totalPagado = comisionesBs + propinasBs - descuentosBs;
+        // Calcular subtotal (antes de aplicar porcentaje)
+        const subtotal = comisionesBs + propinasBs - descuentosBs;
 
         // Llenar campos
         document.getElementById('nomina-comisiones-dolares').value = comisionesDolares.toFixed(2);
@@ -465,7 +489,32 @@
         document.getElementById('nomina-propinas-dolares').value = propinasDolares.toFixed(2);
         document.getElementById('nomina-propinas-bs').value = propinasBs.toFixed(2);
         document.getElementById('nomina-descuentos').value = descuentosBs.toFixed(2);
-        document.getElementById('nomina-total').value = totalPagado.toFixed(2);
+        document.getElementById('nomina-subtotal').value = subtotal.toFixed(2);
+        
+        // Aplicar porcentaje al total
+        recalcularTotalConPorcentaje();
+    }
+
+    // Recalcular total aplicando el porcentaje
+    function recalcularTotalConPorcentaje() {
+        const subtotalInput = document.getElementById('nomina-subtotal');
+        const porcentajeInput = document.getElementById('nomina-porcentaje');
+        const totalInput = document.getElementById('nomina-total');
+        
+        if (!subtotalInput || !porcentajeInput || !totalInput) return;
+        
+        const subtotal = parseFloat(subtotalInput.value.replace(/[^\d.]/g, '')) || 0;
+        const porcentaje = parseInt(porcentajeInput.value) || 100;
+        
+        // Validar que el porcentaje esté entre 1 y 100
+        const porcentajeValido = Math.max(1, Math.min(100, porcentaje));
+        if (porcentajeValido !== porcentaje) {
+            porcentajeInput.value = porcentajeValido;
+        }
+        
+        // Calcular total aplicando porcentaje: subtotal * (porcentaje / 100)
+        const totalPagado = subtotal * (porcentajeValido / 100);
+        totalInput.value = totalPagado.toFixed(2);
     }
 
     // Limpiar campos de nómina
@@ -477,6 +526,8 @@
         document.getElementById('nomina-propinas-dolares').value = '';
         document.getElementById('nomina-propinas-bs').value = '';
         document.getElementById('nomina-descuentos').value = '';
+        document.getElementById('nomina-subtotal').value = '';
+        document.getElementById('nomina-porcentaje').value = '100';
         document.getElementById('nomina-total').value = '';
     }
 
@@ -552,6 +603,7 @@
         const propinasDolares = parseFloat(document.getElementById('nomina-propinas-dolares').value) || 0;
         const propinasBs = parseFloat(document.getElementById('nomina-propinas-bs').value) || 0;
         const descuentosBs = parseFloat(document.getElementById('nomina-descuentos').value) || 0;
+        const porcentaje = parseInt(document.getElementById('nomina-porcentaje').value) || 100;
         const totalPagado = parseFloat(document.getElementById('nomina-total').value) || 0;
 
         if (totalPagado < 0) {
@@ -572,9 +624,9 @@
             // Crear nómina
             const resultado = await window.electronAPI.dbRun(
                 `INSERT INTO Nominas 
-                (id_empleado, comisiones_referencia_en_dolares, comisiones_bs, propina_en_dolares, propina_bs, descuentos_consumos_bs, total_pagado_bs, fecha_pago) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [idEmpleado, comisionesDolares, comisionesBs, propinasDolares, propinasBs, descuentosBs, totalPagado, fechaFormato]
+                (id_empleado, comisiones_referencia_en_dolares, comisiones_bs, propina_en_dolares, propina_bs, descuentos_consumos_bs, total_pagado_bs, fecha_pago, porcentaje_pagado) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [idEmpleado, comisionesDolares, comisionesBs, propinasDolares, propinasBs, descuentosBs, totalPagado, fechaFormato, porcentaje]
             );
             
             const idNomina = resultado.lastInsertRowid;
@@ -623,6 +675,10 @@
                 WHERE ce.id_nomina = ?
             `, [id]);
 
+            // Calcular subtotal
+            const subtotal = parseFloat(nomina.comisiones_bs || 0) + parseFloat(nomina.propina_bs || 0) - parseFloat(nomina.descuentos_consumos_bs || 0);
+            const porcentaje = parseInt(nomina.porcentaje_pagado || 100);
+            
             let mensaje = `Nómina #${nomina.id}\n\n`;
             mensaje += `Empleado: ${nomina.nombre_empleado}\n`;
             mensaje += `Fecha de Pago: ${nomina.fecha_pago}\n\n`;
@@ -633,6 +689,8 @@
             mensaje += `  - Referencia: $${parseFloat(nomina.propina_en_dolares || 0).toFixed(2)}\n`;
             mensaje += `  - Bolívares: ${parseFloat(nomina.propina_bs || 0).toFixed(2)} Bs\n\n`;
             mensaje += `Descuentos por Consumos: ${parseFloat(nomina.descuentos_consumos_bs).toFixed(2)} Bs\n\n`;
+            mensaje += `Subtotal: ${subtotal.toFixed(2)} Bs\n`;
+            mensaje += `Porcentaje Pagado: ${porcentaje}%\n\n`;
             
             if (consumos.length > 0) {
                 mensaje += `Consumos Descontados:\n`;

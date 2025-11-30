@@ -107,6 +107,18 @@
                     <input type="text" id="nomina-descuentos" name="descuentos" placeholder="0.00" readonly>
                 </div>
                 <div class="form-group" style="flex: 1;">
+                    <label>Subtotal (Bs)</label>
+                    <input type="text" id="nomina-subtotal" name="subtotal" placeholder="0.00" readonly>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group" style="flex: 1;">
+                    <label>Porcentaje a Pagar (%) *</label>
+                    <input type="number" id="nomina-porcentaje" name="porcentaje" min="1" max="100" value="100" required placeholder="100" inputmode="numeric">
+                    <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block;">Ingrese un número del 1 al 100 (ejemplo: 65 = 65%)</small>
+                </div>
+                <div class="form-group" style="flex: 1;">
                     <label>Total a Pagar (Bs) *</label>
                     <input type="text" id="nomina-total" name="total_pagado" placeholder="0.00" readonly style="font-size: 18px; font-weight: 600;">
                 </div>
