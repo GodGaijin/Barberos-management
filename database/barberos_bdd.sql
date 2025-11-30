@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS ServiciosRealizados (
     fecha TEXT NOT NULL, -- Fecha/hora del servicio
     precio_cobrado REAL NOT NULL,
     propina REAL NOT NULL DEFAULT 0,
+    propina_en_dolares REAL DEFAULT 0, -- Propina en dólares (independiente de propina en Bs)
     estado TEXT NOT NULL CHECK(estado IN ('completado', 'cancelado', 'pendiente')) DEFAULT 'completado',
     FOREIGN KEY (id_transaccion) REFERENCES Transacciones(id) ON DELETE CASCADE,
     FOREIGN KEY (id_empleado) REFERENCES Empleados(id) ON DELETE CASCADE,

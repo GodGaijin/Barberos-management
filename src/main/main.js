@@ -40,6 +40,21 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Detectar cuando la ventana recupera el foco y forzar campos editables
+  mainWindow.on('focus', () => {
+    if (mainWindow && mainWindow.webContents) {
+      // Enviar mensaje al renderer para forzar campos editables
+      mainWindow.webContents.send('window-focused');
+    }
+  });
+
+  // También detectar cuando la ventana se muestra
+  mainWindow.on('show', () => {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('window-focused');
+    }
+  });
 }
 
 // Inicializar la base de datos
@@ -181,6 +196,21 @@ ipcMain.handle('quit-and-install', () => {
 
 ipcMain.handle('download-update', () => {
   autoUpdater.downloadUpdate();
+});
+
+// Handler para forzar el foco de la ventana (solución a campos bloqueados)
+ipcMain.on('fix-focus', () => {
+  if (mainWindow) {
+    // Primero desenfocamos, luego enfocamos para simular el Alt+Tab
+    mainWindow.blur();
+    setTimeout(() => {
+      mainWindow.focus();
+      // También forzar el foco del contenido web
+      if (mainWindow.webContents) {
+        mainWindow.webContents.focus();
+      }
+    }, 10);
+  }
 });
 
 // Cuando Electron esté listo, crear la ventana

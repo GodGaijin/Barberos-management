@@ -210,7 +210,7 @@ function formatearInputCantidad(input) {
 }
 
 // Obtener valor numérico de un input formateado
-function obtenerValorNumerico(input) {
+window.obtenerValorNumerico = function(input) {
     if (!input) return 0;
     // Remover el punto y convertir directamente
     // Ejemplo: "001.23" -> "00123" -> 123 / 100 = 1.23
@@ -220,4 +220,145 @@ function obtenerValorNumerico(input) {
     // Los últimos 2 dígitos son decimales
     const num = parseInt(valor);
     return num / 100;
+};
+
+// Función global para forzar que los campos editables se mantengan editables
+// Útil cuando la ventana pierde y recupera el foco
+window.forzarCamposEditables = function() {
+    // Buscar todos los inputs, textareas y selects que NO deberían estar bloqueados
+    const camposEditables = document.querySelectorAll(`
+        input:not([readonly]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+        textarea:not([readonly]),
+        select:not([disabled])
+    `);
+    
+    camposEditables.forEach(campo => {
+        // Solo procesar campos que no están explícitamente marcados como readonly o disabled
+        // y que no son campos calculados (como precios readonly)
+        const esReadonly = campo.hasAttribute('readonly') || campo.readOnly;
+        const esDisabled = campo.disabled;
+        const esCalculado = campo.classList.contains('servicio-precio') || 
+                           campo.classList.contains('producto-precio-unitario') || 
+                           campo.classList.contains('producto-total') ||
+                           campo.classList.contains('transaccion-total-general') ||
+                           campo.classList.contains('nomina-comisiones-dolares') ||
+                           campo.classList.contains('nomina-comisiones-bs') ||
+                           campo.classList.contains('nomina-propinas-dolares') ||
+                           campo.classList.contains('nomina-propinas-bs') ||
+                           campo.classList.contains('nomina-descuentos') ||
+                           campo.classList.contains('nomina-subtotal') ||
+                           campo.classList.contains('nomina-total');
+        
+        if (!esReadonly && !esDisabled && !esCalculado) {
+            // Forzar que el campo sea editable
+            campo.style.pointerEvents = 'auto';
+            campo.style.cursor = 'text';
+            campo.removeAttribute('readonly');
+            campo.disabled = false;
+            
+            // Si es un input formateado, asegurar que el formateo siga activo
+            if (campo._formateadoPrecio && typeof formatearInputPrecio === 'function') {
+                // No re-aplicar el formateo si ya está aplicado, solo asegurar que esté activo
+                campo.style.pointerEvents = 'auto';
+                campo.style.cursor = 'text';
+            } else if (campo._formateadoCantidad && typeof formatearInputCantidad === 'function') {
+                campo.style.pointerEvents = 'auto';
+                campo.style.cursor = 'text';
+            }
+        }
+    });
+    
+    // No forzar foco automáticamente aquí para evitar parpadeo
+    // Solo se forzará cuando sea realmente necesario (errores, pérdida de foco, etc.)
+};
+
+// Agregar listener para cuando la ventana recupera el foco
+window.addEventListener('focus', () => {
+    // Pequeño delay para asegurar que el DOM esté listo
+    setTimeout(() => {
+        window.forzarCamposEditables();
+        // Solo forzar foco si realmente se perdió (no siempre para evitar parpadeo)
+        // El foco ya se recuperó naturalmente con este evento
+    }, 100);
+});
+
+// También forzar cuando se hace clic en un campo (por si se bloqueó)
+document.addEventListener('click', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
+        const campo = e.target;
+        const esReadonly = campo.hasAttribute('readonly') || campo.readOnly;
+        const esDisabled = campo.disabled;
+        const esCalculado = campo.classList.contains('servicio-precio') || 
+                           campo.classList.contains('producto-precio-unitario') || 
+                           campo.classList.contains('producto-total');
+        
+        if (!esReadonly && !esDisabled && !esCalculado) {
+            // Forzar que el campo sea editable al hacer clic
+            campo.style.pointerEvents = 'auto';
+            campo.style.cursor = 'text';
+            campo.removeAttribute('readonly');
+            campo.disabled = false;
+        }
+    }
+}, true); // Usar capture phase para interceptar antes que otros handlers
+
+// Listener para cuando un campo recibe focus - desbloquear inmediatamente
+document.addEventListener('focusin', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
+        const campo = e.target;
+        const esReadonly = campo.hasAttribute('readonly') || campo.readOnly;
+        const esDisabled = campo.disabled;
+        const esCalculado = campo.classList.contains('servicio-precio') || 
+                           campo.classList.contains('producto-precio-unitario') || 
+                           campo.classList.contains('producto-total');
+        
+        if (!esReadonly && !esDisabled && !esCalculado) {
+            // Forzar que el campo sea editable al recibir focus
+            campo.style.pointerEvents = 'auto';
+            campo.style.cursor = 'text';
+            campo.removeAttribute('readonly');
+            campo.disabled = false;
+        }
+    }
+}, true);
+
+// Observer para detectar cuando se abren/cierran modales y forzar campos editables
+const modalObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+            const target = mutation.target;
+            if (target.classList && target.classList.contains('modal')) {
+                if (target.classList.contains('active')) {
+                    // Modal se abrió, forzar campos editables después de un pequeño delay
+                    setTimeout(() => {
+                        if (typeof window.forzarCamposEditables === 'function') {
+                            window.forzarCamposEditables();
+                        }
+                    }, 150);
+                } else {
+                    // Modal se cerró, solo forzar campos editables (sin forzar foco para evitar parpadeo)
+                    setTimeout(() => {
+                        if (typeof window.forzarCamposEditables === 'function') {
+                            window.forzarCamposEditables();
+                        }
+                    }, 100);
+                }
+            }
+        }
+    });
+});
+
+// Observar todos los modales cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            modalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
+        });
+    });
+} else {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        modalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
+    });
 }

@@ -281,8 +281,16 @@
         );
 
         if (reporteExistente) {
-            if (!confirm('Ya existe un reporte para esta fecha. ¿Desea regenerarlo?')) {
-                return;
+            if (typeof window.mostrarConfirmacion === 'function') {
+                const confirmado = await window.mostrarConfirmacion('Ya existe un reporte para esta fecha. ¿Desea regenerarlo?', 'Confirmar Regeneración');
+                if (!confirmado) {
+                    return;
+                }
+            } else {
+                // Fallback si no está disponible
+                if (!confirm('Ya existe un reporte para esta fecha. ¿Desea regenerarlo?')) {
+                    return;
+                }
             }
             // Eliminar reporte existente
             await window.electronAPI.dbRun(
@@ -614,11 +622,19 @@
 
     // Mostrar mensajes
     function mostrarError(mensaje) {
-        alert('Error: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Error: ' + mensaje, 'error', 5000);
+        } else {
+            console.error('Error: ' + mensaje);
+        }
     }
 
     function mostrarExito(mensaje) {
-        alert('Éxito: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Éxito: ' + mensaje, 'success', 3000);
+        } else {
+            console.log('Éxito: ' + mensaje);
+        }
     }
 })();
 

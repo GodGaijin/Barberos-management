@@ -34,6 +34,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isAuthenticated || localStorage.getItem('sessionActive') === 'true') {
         initUpdater();
     }
+    
+    // Listener para cuando la ventana recupera el foco (desde Electron)
+    if (window.electronAPI && window.electronAPI.on) {
+        window.electronAPI.on('window-focused', () => {
+            // Forzar que los campos editables se mantengan editables
+            if (typeof window.forzarCamposEditables === 'function') {
+                setTimeout(() => {
+                    window.forzarCamposEditables();
+                }, 50);
+            }
+        });
+    }
+    
+    // También usar el evento nativo de window focus como respaldo
+    window.addEventListener('focus', () => {
+        if (typeof window.forzarCamposEditables === 'function') {
+            setTimeout(() => {
+                window.forzarCamposEditables();
+            }, 100);
+        }
+    });
+    
+    // Listener para cuando la página se vuelve visible (útil para ALT+TAB)
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && typeof window.forzarCamposEditables === 'function') {
+            setTimeout(() => {
+                window.forzarCamposEditables();
+            }, 100);
+        }
+    });
 });
 
 // Inicializar y actualizar fecha/hora
@@ -395,16 +425,28 @@ window.downloadUpdate = async function() {
         await window.updaterAPI.downloadUpdate();
     } catch (error) {
         console.error('Error al descargar actualización:', error);
-        alert('Error al descargar la actualización. Por favor, intenta más tarde.');
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Error al descargar la actualización. Por favor, intenta más tarde.', 'error', 5000);
+        } else {
+            console.error('Error al descargar la actualización');
+        }
     }
 };
 
 // Instalar actualización
-window.installUpdate = function() {
+window.installUpdate = async function() {
     if (!window.updaterAPI) return;
     
-    if (confirm('¿Estás seguro de que deseas instalar la actualización ahora? La aplicación se reiniciará.')) {
-        window.updaterAPI.quitAndInstall();
+    if (typeof window.mostrarConfirmacion === 'function') {
+        const confirmado = await window.mostrarConfirmacion('¿Estás seguro de que deseas instalar la actualización ahora? La aplicación se reiniciará.', 'Confirmar Instalación');
+        if (confirmado) {
+            window.updaterAPI.quitAndInstall();
+        }
+    } else {
+        // Fallback si no está disponible
+        if (confirm('¿Estás seguro de que deseas instalar la actualización ahora? La aplicación se reiniciará.')) {
+            window.updaterAPI.quitAndInstall();
+        }
     }
 };
 

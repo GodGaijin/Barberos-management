@@ -208,7 +208,11 @@
                         window.editarTasa(parseInt(tasaId));
                     } else {
                         console.error('window.editarTasa no está disponible');
-                        alert('Error: Función de edición no disponible. Por favor, recarga la página.');
+                        if (typeof window.mostrarNotificacion === 'function') {
+                            window.mostrarNotificacion('Error: Función de edición no disponible. Por favor, recarga la página.', 'error', 5000);
+                        } else {
+                            console.error('Error: Función de edición no disponible');
+                        }
                     }
                 };
             });
@@ -221,7 +225,11 @@
                         window.eliminarTasa(parseInt(tasaId));
                     } else {
                         console.error('window.eliminarTasa no está disponible');
-                        alert('Error: Función de eliminación no disponible. Por favor, recarga la página.');
+                        if (typeof window.mostrarNotificacion === 'function') {
+                            window.mostrarNotificacion('Error: Función de eliminación no disponible. Por favor, recarga la página.', 'error', 5000);
+                        } else {
+                            console.error('Error: Función de eliminación no disponible');
+                        }
                     }
                 };
             });
@@ -840,12 +848,18 @@
 
     // Mostrar mensajes
     function mostrarError(mensaje) {
-        // Implementar notificación de error
-        alert('Error: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Error: ' + mensaje, 'error', 5000);
+        } else {
+            console.error('Error: ' + mensaje);
+        }
     }
 
     function mostrarExito(mensaje) {
-        // Implementar notificación de éxito
-        alert('Éxito: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Éxito: ' + mensaje, 'success', 3000);
+        } else {
+            console.log('Éxito: ' + mensaje);
+        }
     }
 })();

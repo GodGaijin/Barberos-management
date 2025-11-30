@@ -27,5 +27,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbGet: (query, params) => ipcRenderer.invoke('db-get', query, params),
   // Authentication
   login: (username, password) => ipcRenderer.invoke('auth-login', username, password),
+  // Window events
+  on: (channel, callback) => {
+    const validChannels = ['window-focused'];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.on(channel, (event, ...args) => callback(...args));
+    }
+  },
+  removeListener: (channel, callback) => {
+    ipcRenderer.removeListener(channel, callback);
+  },
+  // Fix focus
+  fixFocus: () => ipcRenderer.send('fix-focus')
 });
 

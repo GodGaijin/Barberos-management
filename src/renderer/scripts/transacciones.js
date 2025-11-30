@@ -119,7 +119,34 @@
             // Validar métodos de pago que requieren entidad
             const metodoPagoCheckboxes = document.querySelectorAll('.metodo-pago-checkbox');
             metodoPagoCheckboxes.forEach(checkbox => {
-                checkbox.onchange = validarMetodosPago;
+                checkbox.onchange = (e) => {
+                    // Agregar/quitar clase checked al contenedor
+                    const checkboxItem = checkbox.closest('.checkbox-item');
+                    if (checkboxItem) {
+                        if (e.target.checked) {
+                            checkboxItem.classList.add('checked');
+                        } else {
+                            checkboxItem.classList.remove('checked');
+                        }
+                    }
+                    validarMetodosPago();
+                };
+            });
+            
+            // Aplicar estilos a entidades también
+            const entidadPagoCheckboxes = document.querySelectorAll('.entidad-pago-checkbox');
+            entidadPagoCheckboxes.forEach(checkbox => {
+                checkbox.onchange = (e) => {
+                    // Agregar/quitar clase checked al contenedor
+                    const checkboxItem = checkbox.closest('.checkbox-item');
+                    if (checkboxItem) {
+                        if (e.target.checked) {
+                            checkboxItem.classList.add('checked');
+                        } else {
+                            checkboxItem.classList.remove('checked');
+                        }
+                    }
+                };
             });
 
             // Búsqueda y filtros
@@ -453,7 +480,7 @@
                     </div>
                     <div class="form-group" style="flex: 1;">
                         <label>Propina Ref. ($)</label>
-                        <input type="text" class="servicio-propina-dolares" data-fila="${filaId}" placeholder="0.00" readonly>
+                        <input type="text" class="servicio-propina-dolares" data-fila="${filaId}" placeholder="0.00" inputmode="decimal">
                     </div>
                 </div>
             </div>
@@ -470,12 +497,36 @@
         }
         
         const propinaInput = filaElement.querySelector('.servicio-propina');
+        const propinaDolaresInput = filaElement.querySelector('.servicio-propina-dolares');
+        
         if (propinaInput) {
             if (typeof formatearInputPrecio === 'function') {
                 formatearInputPrecio(propinaInput);
             }
-            propinaInput.oninput = async () => {
-                await calcularPropinaDolares(filaId);
+            // Guardar handler original si existe
+            const originalPropinaInput = propinaInput.oninput;
+            propinaInput.oninput = function(e) {
+                // Llamar al handler original del formateo si existe
+                if (originalPropinaInput && typeof originalPropinaInput === 'function') {
+                    originalPropinaInput.call(this, e);
+                }
+                // Actualizar total general
+                actualizarTotalGeneral();
+            };
+        }
+        
+        if (propinaDolaresInput) {
+            if (typeof formatearInputPrecio === 'function') {
+                formatearInputPrecio(propinaDolaresInput);
+            }
+            // Guardar handler original si existe
+            const originalPropinaDolaresInput = propinaDolaresInput.oninput;
+            propinaDolaresInput.oninput = function(e) {
+                // Llamar al handler original del formateo si existe
+                if (originalPropinaDolaresInput && typeof originalPropinaDolaresInput === 'function') {
+                    originalPropinaDolaresInput.call(this, e);
+                }
+                // Actualizar total general (aunque la propina en dólares no se suma al total en Bs)
                 actualizarTotalGeneral();
             };
         }
@@ -519,47 +570,6 @@
         actualizarTotalGeneral();
     }
 
-    // Calcular propina en dólares basándose en la tasa del día
-    async function calcularPropinaDolares(filaId) {
-        const fila = document.getElementById(filaId);
-        if (!fila) return;
-        
-        const propinaInput = fila.querySelector('.servicio-propina');
-        const propinaDolaresInput = fila.querySelector('.servicio-propina-dolares');
-        
-        if (!propinaInput || !propinaDolaresInput) return;
-        
-        const propinaBs = parseFloat(propinaInput.value.replace(/[^\d.]/g, '')) || 0;
-        
-        if (propinaBs === 0) {
-            propinaDolaresInput.value = '0.00';
-            return;
-        }
-        
-        try {
-            // Obtener fecha de hoy
-            const hoy = new Date();
-            const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
-            
-            // Obtener tasa del día
-            const tasaHoy = await window.electronAPI.dbGet(
-                'SELECT * FROM TasasCambio WHERE fecha = ?',
-                [fechaHoy]
-            );
-            
-            if (!tasaHoy) {
-                propinaDolaresInput.value = '0.00';
-                return;
-            }
-            
-            // Calcular propina en dólares
-            const propinaDolares = propinaBs / tasaHoy.tasa_bs_por_dolar;
-            propinaDolaresInput.value = propinaDolares.toFixed(2);
-        } catch (error) {
-            console.error('Error al calcular propina en dólares:', error);
-            propinaDolaresInput.value = '0.00';
-        }
-    }
 
     // Agregar una nueva fila de producto
     function agregarFilaProducto() {
@@ -694,8 +704,14 @@
                 totalGeneral += precio;
             }
             
-            if (propinaInput && propinaInput.value) {
-                const propina = parseFloat(propinaInput.value.replace(/[^\d.]/g, '')) || 0;
+            if (propinaInput && propinaInput.value && propinaInput.value.trim() !== '') {
+                let propina = 0;
+                // Si el input está formateado, usar obtenerValorNumerico, sino parseFloat normal
+                if (typeof window.obtenerValorNumerico === 'function' && propinaInput._formateadoPrecio) {
+                    propina = window.obtenerValorNumerico(propinaInput) || 0;
+                } else {
+                    propina = parseFloat(propinaInput.value.replace(/[^\d.]/g, '')) || 0;
+                }
                 totalGeneral += propina;
             }
         });
@@ -803,6 +819,7 @@
             const empleadoSelect = fila.querySelector('.servicio-empleado');
             const precioInput = fila.querySelector('.servicio-precio');
             const propinaInput = fila.querySelector('.servicio-propina');
+            const propinaDolaresInput = fila.querySelector('.servicio-propina-dolares');
             
             if (!servicioSelect || !empleadoSelect) continue;
             
@@ -815,13 +832,35 @@
             }
             
             const precio = parseFloat(precioInput.value.replace(/[^\d.]/g, '')) || 0;
-            const propina = parseFloat(propinaInput.value.replace(/[^\d.]/g, '')) || 0;
+            
+            // Obtener propina en Bs - si está vacío o no tiene valor, usar 0
+            let propina = 0;
+            if (propinaInput && propinaInput.value && propinaInput.value.trim() !== '') {
+                // Si el input está formateado, usar obtenerValorNumerico, sino parseFloat normal
+                if (typeof window.obtenerValorNumerico === 'function' && propinaInput._formateadoPrecio) {
+                    propina = window.obtenerValorNumerico(propinaInput) || 0;
+                } else {
+                    propina = parseFloat(propinaInput.value.replace(/[^\d.]/g, '')) || 0;
+                }
+            }
+            
+            // Obtener propina en dólares - si está vacío o no tiene valor, usar 0
+            let propinaDolares = 0;
+            if (propinaDolaresInput && propinaDolaresInput.value && propinaDolaresInput.value.trim() !== '') {
+                // Si el input está formateado, usar obtenerValorNumerico, sino parseFloat normal
+                if (typeof window.obtenerValorNumerico === 'function' && propinaDolaresInput._formateadoPrecio) {
+                    propinaDolares = window.obtenerValorNumerico(propinaDolaresInput) || 0;
+                } else {
+                    propinaDolares = parseFloat(propinaDolaresInput.value.replace(/[^\d.]/g, '')) || 0;
+                }
+            }
             
             serviciosData.push({
                 id_servicio: idServicio,
                 id_empleado: idEmpleado,
                 precio: precio,
-                propina: propina
+                propina: propina,
+                propina_dolares: propinaDolares
             });
         }
 
@@ -976,12 +1015,27 @@
             
             // Crear servicios realizados
             for (const servicioData of serviciosData) {
-                await window.electronAPI.dbRun(
-                    `INSERT INTO ServiciosRealizados 
-                    (id_transaccion, id_empleado, id_servicio, fecha, precio_cobrado, propina, estado) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [idTransaccion, servicioData.id_empleado, servicioData.id_servicio, fechaAperturaStr, servicioData.precio, servicioData.propina, 'completado']
-                );
+                // Intentar insertar con propina_en_dolares si el campo existe, sino sin él
+                try {
+                    await window.electronAPI.dbRun(
+                        `INSERT INTO ServiciosRealizados 
+                        (id_transaccion, id_empleado, id_servicio, fecha, precio_cobrado, propina, propina_en_dolares, estado) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [idTransaccion, servicioData.id_empleado, servicioData.id_servicio, fechaAperturaStr, servicioData.precio, servicioData.propina, servicioData.propina_dolares || 0, 'completado']
+                    );
+                } catch (error) {
+                    // Si el campo propina_en_dolares no existe, insertar sin él
+                    if (error.message && error.message.includes('no such column')) {
+                        await window.electronAPI.dbRun(
+                            `INSERT INTO ServiciosRealizados 
+                            (id_transaccion, id_empleado, id_servicio, fecha, precio_cobrado, propina, estado) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                            [idTransaccion, servicioData.id_empleado, servicioData.id_servicio, fechaAperturaStr, servicioData.precio, servicioData.propina, 'completado']
+                        );
+                    } else {
+                        throw error;
+                    }
+                }
             }
             
             // Crear productos vendidos y descontar stock
@@ -1049,8 +1103,20 @@
             }
             
             // Limpiar formulario
-            document.querySelectorAll('.metodo-pago-checkbox').forEach(cb => cb.checked = false);
-            document.querySelectorAll('.entidad-pago-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.metodo-pago-checkbox').forEach(cb => {
+                cb.checked = false;
+                const checkboxItem = cb.closest('.checkbox-item');
+                if (checkboxItem) {
+                    checkboxItem.classList.remove('checked');
+                }
+            });
+            document.querySelectorAll('.entidad-pago-checkbox').forEach(cb => {
+                cb.checked = false;
+                const checkboxItem = cb.closest('.checkbox-item');
+                if (checkboxItem) {
+                    checkboxItem.classList.remove('checked');
+                }
+            });
             document.getElementById('numero-referencia').value = '';
             document.getElementById('entidades-group').style.display = 'none';
             
@@ -1209,25 +1275,48 @@
                     if (servicioSelect) servicioSelect.value = servicio.id_servicio;
                     if (empleadoSelect) empleadoSelect.value = servicio.id_empleado;
                     if (precioInput) precioInput.value = parseFloat(servicio.precio_cobrado).toFixed(2);
+                    const propinaDolaresInput = fila.querySelector('.servicio-propina-dolares');
+                    
                     if (propinaInput) {
                         propinaInput.value = parseFloat(servicio.propina || 0).toFixed(2);
                         if (typeof formatearInputPrecio === 'function') {
                             formatearInputPrecio(propinaInput);
                         }
-                        // Configurar evento para calcular propina en dólares
-                        propinaInput.oninput = async () => {
-                            await calcularPropinaDolares(filaId);
+                        // Guardar handler original si existe
+                        const originalPropinaInput = propinaInput.oninput;
+                        propinaInput.oninput = function(e) {
+                            // Llamar al handler original del formateo si existe
+                            if (originalPropinaInput && typeof originalPropinaInput === 'function') {
+                                originalPropinaInput.call(this, e);
+                            }
+                            // Actualizar total general
                             actualizarTotalGeneral();
                         };
-                        // Calcular propina en dólares con el valor actual
-                        await calcularPropinaDolares(filaId);
                     }
                     
-                    // Calcular precio y propina en dólares si es necesario
+                    if (propinaDolaresInput) {
+                        // Obtener propina en dólares del servicio si existe
+                        // Nota: La propina en dólares se calcula desde la propina en Bs al guardar
+                        // pero aquí solo mostramos lo que está guardado, no lo calculamos
+                        propinaDolaresInput.value = '';
+                        if (typeof formatearInputPrecio === 'function') {
+                            formatearInputPrecio(propinaDolaresInput);
+                        }
+                        // Guardar handler original si existe
+                        const originalPropinaDolaresInput = propinaDolaresInput.oninput;
+                        propinaDolaresInput.oninput = function(e) {
+                            // Llamar al handler original del formateo si existe
+                            if (originalPropinaDolaresInput && typeof originalPropinaDolaresInput === 'function') {
+                                originalPropinaDolaresInput.call(this, e);
+                            }
+                            // Actualizar total general
+                            actualizarTotalGeneral();
+                        };
+                    }
+                    
+                    // Calcular precio si es necesario
                     if (servicioSelect) {
                         calcularPrecioServicio(filaId);
-                    } else {
-                        calcularPropinaDolares(filaId);
                     }
                 }
             }
@@ -1474,11 +1563,21 @@
 
     // Mostrar mensajes
     function mostrarError(mensaje) {
-        alert('Error: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Error: ' + mensaje, 'error', 5000);
+        } else {
+            console.error('Error: ' + mensaje);
+        }
+        // No forzar foco automáticamente para evitar parpadeo
+        // Solo se forzará si realmente se detecta que los campos están bloqueados
     }
 
     function mostrarExito(mensaje) {
-        alert('Éxito: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Éxito: ' + mensaje, 'success', 3000);
+        } else {
+            console.log('Éxito: ' + mensaje);
+        }
     }
 })();
 

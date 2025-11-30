@@ -473,10 +473,13 @@
         // Calcular comisiones y propinas en Bs
         let comisionesBs = 0;
         let propinasBs = 0;
+        let propinasDolares = 0; // Sumar directamente desde los servicios
         
         servicios.forEach(servicio => {
             comisionesBs += parseFloat(servicio.precio_cobrado || 0);
             propinasBs += parseFloat(servicio.propina || 0);
+            // Sumar propinas en dólares directamente desde los servicios (si existe el campo)
+            propinasDolares += parseFloat(servicio.propina_en_dolares || 0);
         });
 
         // Calcular descuentos por consumos
@@ -485,18 +488,17 @@
             descuentosBs += parseFloat(consumo.precio_total || 0);
         });
 
-        // Obtener tasa del día para calcular en dólares
+        // Obtener tasa del día para calcular comisiones en dólares
         const tasaHoy = await window.electronAPI.dbGet(
             'SELECT * FROM TasasCambio WHERE fecha = ?',
             [fechaFormato]
         );
 
         let comisionesDolares = 0;
-        let propinasDolares = 0;
 
         if (tasaHoy && tasaHoy.tasa_bs_por_dolar) {
             comisionesDolares = comisionesBs / tasaHoy.tasa_bs_por_dolar;
-            propinasDolares = propinasBs / tasaHoy.tasa_bs_por_dolar;
+            // Las propinas en dólares ya están sumadas directamente, no se calculan
         }
 
         // Calcular subtotal (antes de aplicar porcentaje)
@@ -841,11 +843,20 @@
 
     // Mostrar mensajes
     function mostrarError(mensaje) {
-        alert('Error: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Error: ' + mensaje, 'error', 5000);
+        } else {
+            console.error('Error: ' + mensaje);
+        }
+        // No forzar foco automáticamente para evitar parpadeo
     }
 
     function mostrarExito(mensaje) {
-        alert('Éxito: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Éxito: ' + mensaje, 'success', 3000);
+        } else {
+            console.log('Éxito: ' + mensaje);
+        }
     }
 })();
 

@@ -480,12 +480,18 @@
 
     // Mostrar mensajes
     function mostrarError(mensaje) {
-        // Implementar notificación de error
-        alert('Error: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Error: ' + mensaje, 'error', 5000);
+        } else {
+            console.error('Error: ' + mensaje);
+        }
     }
 
     function mostrarExito(mensaje) {
-        // Implementar notificación de éxito
-        alert('Éxito: ' + mensaje);
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Éxito: ' + mensaje, 'success', 3000);
+        } else {
+            console.log('Éxito: ' + mensaje);
+        }
     }
 })();
