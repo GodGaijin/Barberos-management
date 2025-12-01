@@ -291,7 +291,7 @@
                 const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
                 
                 const tasaHoy = await window.electronAPI.dbGet(
-                    'SELECT * FROM TasasCambio WHERE fecha = ?',
+                    'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
                     [fechaHoy]
                 );
                 
@@ -443,7 +443,7 @@
                 const hoy = new Date();
                 const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
                 const tasaHoy = await window.electronAPI.dbGet(
-                    'SELECT * FROM TasasCambio WHERE fecha = ?',
+                    'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
                     [fechaHoy]
                 );
                 if (tasaHoy && precioDolares > 0) {

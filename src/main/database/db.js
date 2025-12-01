@@ -31,6 +31,8 @@ class DB {
       this.migrateTransacciones();
       this.migrateReportesDiarios();
       this.migrateCitas();
+      // Migrar TasasCambio para permitir múltiples tasas por día
+      this.migrateTasasCambio();
     }
     
     // Habilitar foreign keys
@@ -280,8 +282,8 @@ class DB {
         const sql = tableInfo.sql;
         
         // Verificar si faltan los nuevos campos
-        if (!sql.includes('metodos_pago') || !sql.includes('entidades_pago') || !sql.includes('numero_referencia')) {
-          console.log('Actualizando tabla Transacciones para incluir métodos de pago, entidades y número de referencia...');
+        if (!sql.includes('metodos_pago') || !sql.includes('entidades_pago') || !sql.includes('numero_referencia') || !sql.includes('tasa_cambio')) {
+          console.log('Actualizando tabla Transacciones para incluir métodos de pago, entidades, número de referencia y tasa de cambio...');
           
           // Agregar nuevas columnas si no existen
           try {
@@ -308,6 +310,15 @@ class DB {
           } catch (e) {
             if (!e.message.includes('duplicate column')) {
               console.error('Error al agregar numero_referencia:', e);
+            }
+          }
+          
+          try {
+            this.db.exec('ALTER TABLE Transacciones ADD COLUMN tasa_cambio REAL;');
+            console.log('Columna tasa_cambio agregada');
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar tasa_cambio:', e);
             }
           }
           
@@ -397,6 +408,56 @@ class DB {
       }
     } catch (error) {
       console.error('Error al migrar tabla Citas:', error);
+    }
+  }
+
+  migrateTasasCambio() {
+    try {
+      // Verificar si la tabla TasasCambio tiene la restricción UNIQUE en fecha
+      const tableInfo = this.db.prepare(`
+        SELECT sql FROM sqlite_master
+        WHERE type='table' AND name='TasasCambio'
+      `).get();
+
+      if (tableInfo && tableInfo.sql) {
+        const sql = tableInfo.sql;
+        
+        // Verificar si tiene la restricción UNIQUE(fecha)
+        if (sql.includes('UNIQUE(fecha)') || sql.includes('UNIQUE (fecha)')) {
+          console.log('Migrando tabla TasasCambio para permitir múltiples tasas por día...');
+          
+          // Crear tabla temporal sin la restricción UNIQUE
+          this.db.exec(`
+            CREATE TABLE TasasCambio_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              fecha TEXT NOT NULL,
+              tasa_bs_por_dolar REAL NOT NULL
+            );
+          `);
+          
+          // Copiar datos existentes
+          this.db.exec(`
+            INSERT INTO TasasCambio_new (id, fecha, tasa_bs_por_dolar)
+            SELECT id, fecha, tasa_bs_por_dolar FROM TasasCambio;
+          `);
+          
+          // Eliminar tabla antigua
+          this.db.exec('DROP TABLE TasasCambio;');
+          
+          // Renombrar tabla nueva
+          this.db.exec('ALTER TABLE TasasCambio_new RENAME TO TasasCambio;');
+          
+          // Recrear índice (sin UNIQUE)
+          this.db.exec('CREATE INDEX IF NOT EXISTS idx_tasas_cambio_fecha ON TasasCambio(fecha);');
+          
+          console.log('✅ Tabla TasasCambio migrada exitosamente - ahora permite múltiples tasas por día');
+        } else {
+          console.log('Tabla TasasCambio ya permite múltiples tasas por día');
+        }
+      }
+    } catch (error) {
+      console.error('Error al migrar tabla TasasCambio:', error);
+      // No lanzar el error para que la aplicación pueda continuar
     }
   }
 

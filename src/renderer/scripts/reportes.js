@@ -141,7 +141,7 @@
             console.log('Consultando base de datos...');
             const resultados = await window.electronAPI.dbQuery(`
                 SELECT * FROM ReportesDiarios
-                ORDER BY fecha_reporte DESC, id DESC
+                ORDER BY id DESC
             `);
             console.log('Reportes obtenidos:', resultados);
             
@@ -302,7 +302,7 @@
         try {
             // Obtener tasa del día
             const tasa = await window.electronAPI.dbGet(
-                'SELECT * FROM TasasCambio WHERE fecha = ?',
+                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
                 [fechaFormato]
             );
 
@@ -352,6 +352,7 @@
                     -- Si la fecha está en formato ISO (YYYY-MM-DD)
                     strftime('%Y-%m-%d', sr.fecha) = ?
                 )
+                ORDER BY sr.id DESC
             `, [fechaFormato, fechaInput]);
 
             // Obtener productos vendidos ese día
@@ -369,6 +370,7 @@
                     -- Si la fecha está en formato ISO (YYYY-MM-DD)
                     strftime('%Y-%m-%d', pv.fecha) = ?
                 )
+                ORDER BY pv.id DESC
             `, [fechaFormato, fechaInput]);
 
             // Calcular totales

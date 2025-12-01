@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS Empleados (
 CREATE TABLE IF NOT EXISTS TasasCambio (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     fecha TEXT NOT NULL, -- Formato: "05/09/2024"
-    tasa_bs_por_dolar REAL NOT NULL,
-    UNIQUE(fecha)
+    tasa_bs_por_dolar REAL NOT NULL
+    -- Nota: Se permite múltiples tasas por día (sin UNIQUE)
 );
 
 -- Tabla: ConsumosEmpleados
@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS Transacciones (
     productos_comprados_cantidad TEXT, -- Cantidades de productos separadas (cada línea = cantidad del producto correspondiente)
     total_en_dolares REAL NOT NULL DEFAULT 0,
     total_en_bs REAL NOT NULL DEFAULT 0,
+    tasa_cambio REAL, -- Tasa de cambio más reciente del día al momento de cerrar la transacción
     metodos_pago TEXT, -- Métodos de pago separados por coma: "efectivo,transferencia"
     entidades_pago TEXT, -- Entidades de pago separadas por coma: "Banesco,Zelle"
     numero_referencia TEXT, -- Números de referencia separados por coma: "123456,789012"

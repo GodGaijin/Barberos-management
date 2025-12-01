@@ -314,7 +314,7 @@
                     c.nombre || ' ' || c.apellido as nombre_cliente
                 FROM Transacciones t
                 JOIN Clientes c ON t.id_cliente = c.id
-                ORDER BY t.fecha_apertura DESC, t.id DESC
+                ORDER BY t.id DESC
             `);
             console.log('Transacciones obtenidas:', resultados);
             
@@ -736,6 +736,10 @@
         
         let requiereEntidad = false;
         metodoCheckboxes.forEach(checkbox => {
+            // Punto de venta no requiere entidad (se sobreentiende la entidad del POS físico)
+            if (checkbox.value === 'punto_venta') {
+                return; // Saltar punto_venta
+            }
             if (checkbox.dataset.requiereEntidad === 'true') {
                 requiereEntidad = true;
             }
@@ -805,7 +809,7 @@
         let productosOriginales = [];
         if (esEdicion) {
             productosOriginales = await window.electronAPI.dbQuery(
-                'SELECT * FROM ProductosVendidos WHERE id_transaccion = ?',
+                'SELECT * FROM ProductosVendidos WHERE id_transaccion = ? ORDER BY id DESC',
                 [idTransaccion]
             );
         }
@@ -932,7 +936,7 @@
         const hoy = new Date();
         const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
         const tasaHoy = await window.electronAPI.dbGet(
-            'SELECT * FROM TasasCambio WHERE fecha = ?',
+            'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
             [fechaHoy]
         );
         
@@ -1145,12 +1149,16 @@
             return;
         }
 
-        // Verificar si algún método requiere entidad
+        // Verificar si algún método requiere entidad (excluyendo punto_venta)
         const metodosConEntidad = metodosSeleccionados.filter(m => {
+            // Punto de venta no requiere entidad (se sobreentiende la entidad del POS físico)
+            if (m === 'punto_venta') {
+                return false;
+            }
             const checkbox = document.querySelector(`.metodo-pago-checkbox[value="${m}"]`);
             return checkbox && checkbox.dataset.requiereEntidad === 'true';
         });
-
+        
         // Obtener entidades seleccionadas
         const entidadesSeleccionadas = Array.from(document.querySelectorAll('.entidad-pago-checkbox:checked'))
             .map(cb => cb.value);
@@ -1175,13 +1183,29 @@
         const minuto = String(fechaCierre.getMinutes()).padStart(2, '0');
         const segundo = String(fechaCierre.getSeconds()).padStart(2, '0');
         const fechaCierreStr = `${dia}/${mes}/${año} ${hora}:${minuto}:${segundo}`;
+        
+        // Obtener la tasa de cambio más reciente del día
+        const fechaHoy = `${dia}/${mes}/${año}`;
+        let tasaCambio = null;
+        try {
+            const tasaMasReciente = await window.electronAPI.dbGet(
+                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+                [fechaHoy]
+            );
+            if (tasaMasReciente) {
+                tasaCambio = tasaMasReciente.tasa_bs_por_dolar;
+            }
+        } catch (error) {
+            console.error('Error al obtener tasa de cambio:', error);
+            // Continuar sin tasa si hay error
+        }
 
         try {
             await window.electronAPI.dbRun(
                 `UPDATE Transacciones 
-                SET fecha_cierre = ?, estado = ?, metodos_pago = ?, entidades_pago = ?, numero_referencia = ? 
+                SET fecha_cierre = ?, estado = ?, metodos_pago = ?, entidades_pago = ?, numero_referencia = ?, tasa_cambio = ? 
                 WHERE id = ?`,
-                [fechaCierreStr, 'cerrada', metodosPagoStr, entidadesPagoStr, numeroReferencia || null, id]
+                [fechaCierreStr, 'cerrada', metodosPagoStr, entidadesPagoStr, numeroReferencia || null, tasaCambio, id]
             );
 
             cerrarModalCerrar();
@@ -1237,6 +1261,7 @@
                 FROM ServiciosRealizados sr
                 JOIN Servicios s ON sr.id_servicio = s.id
                 WHERE sr.id_transaccion = ? AND sr.estado = 'completado'
+                ORDER BY sr.id DESC
             `, [id]);
 
             // Cargar productos vendidos
@@ -1248,6 +1273,7 @@
                 FROM ProductosVendidos pv
                 JOIN Productos p ON pv.id_producto = p.id
                 WHERE pv.id_transaccion = ?
+                ORDER BY pv.id DESC
             `, [id]);
 
             // Limpiar listas
@@ -1387,6 +1413,7 @@
                 JOIN Servicios s ON sr.id_servicio = s.id
                 JOIN Empleados e ON sr.id_empleado = e.id
                 WHERE sr.id_transaccion = ? AND sr.estado = 'completado'
+                ORDER BY sr.id DESC
             `, [id]);
 
             // Obtener productos vendidos
@@ -1397,6 +1424,7 @@
                 FROM ProductosVendidos pv
                 JOIN Productos p ON pv.id_producto = p.id
                 WHERE pv.id_transaccion = ?
+                ORDER BY pv.id DESC
             `, [id]);
 
             // Formatear fecha

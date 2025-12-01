@@ -169,7 +169,7 @@
                     cl.nombre || ' ' || cl.apellido as nombre_cliente
                 FROM Citas c
                 LEFT JOIN Clientes cl ON c.id_cliente = cl.id
-                ORDER BY c.fecha_hora ASC
+                ORDER BY c.fecha_hora DESC
             `);
             console.log('Citas obtenidas:', resultados);
             

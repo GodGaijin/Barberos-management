@@ -141,8 +141,8 @@
             }
             
             console.log('Consultando base de datos...');
-            // Ordenar por fecha descendente (más recientes primero)
-            const resultados = await window.electronAPI.dbQuery('SELECT * FROM TasasCambio ORDER BY fecha DESC');
+            // Ordenar por ID descendente (más recientes primero) ya que el ID es autoincremental
+            const resultados = await window.electronAPI.dbQuery('SELECT * FROM TasasCambio ORDER BY id DESC');
             console.log('Tasas obtenidas:', resultados);
             
             window.tasasModule.tasas = resultados || [];
@@ -265,15 +265,15 @@
         return fechaComparar === fechaHoy;
     }
 
-    // Actualizar tasa actual del día
+    // Actualizar tasa actual del día (la más reciente)
     async function actualizarTasaActual() {
         try {
             const hoy = new Date();
             const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
             
-            // Buscar tasa de hoy
+            // Buscar la tasa más reciente de hoy (ordenada por ID descendente)
             const tasaHoy = await window.electronAPI.dbGet(
-                'SELECT * FROM TasasCambio WHERE fecha = ?',
+                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
                 [fechaHoy]
             );
             
@@ -301,14 +301,14 @@
             // Usar función auxiliar para obtener fecha local en formato YYYY-MM-DD
             const fechaHoyISO = window.obtenerFechaLocalInput ? window.obtenerFechaLocalInput() : hoy.toISOString().split('T')[0];
             
-            console.log('Buscando tasa para fecha:', fechaHoy);
-            // Verificar si ya existe una tasa para hoy
-            const tasaExistente = await window.electronAPI.dbGet(
-                'SELECT * FROM TasasCambio WHERE fecha = ?',
+            console.log('Buscando tasa más reciente para fecha:', fechaHoy);
+            // Obtener la tasa más reciente de hoy (si existe)
+            const tasaMasReciente = await window.electronAPI.dbGet(
+                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
                 [fechaHoy]
             );
             
-            console.log('Tasa existente:', tasaExistente);
+            console.log('Tasa más reciente:', tasaMasReciente);
             
             const modalTitle = document.getElementById('modal-title');
             const tasaId = document.getElementById('tasa-id');
@@ -322,26 +322,17 @@
                 return;
             }
             
-            if (tasaExistente) {
-                // Si existe, abrir modal para editarla
-                console.log('Editando tasa existente');
-                tasaEditando = tasaExistente;
-                window.tasasModule.tasaEditando = tasaExistente;
-                modalTitle.textContent = 'Editar Tasa de Hoy';
-                tasaId.value = tasaExistente.id;
-                tasaFecha.value = fechaHoyISO;
-                // Formatear tasa a 2 decimales
+            // Siempre abrir modal para crear nueva tasa (se permiten múltiples por día)
+            console.log('Creando nueva tasa para hoy');
+            abrirModalNuevo();
+            tasaFecha.value = fechaHoyISO;
+            tasaFecha.disabled = true; // Bloquear fecha (ya está establecida)
+            
+            // Si hay una tasa reciente, sugerir su valor
+            if (tasaMasReciente) {
                 tasaValor.value = typeof formatearDecimales === 'function' 
-                    ? formatearDecimales(tasaExistente.tasa_bs_por_dolar) 
-                    : parseFloat(tasaExistente.tasa_bs_por_dolar).toFixed(2);
-                tasaFecha.disabled = true; // No permitir cambiar la fecha
-                tasaModal.classList.add('active');
-            } else {
-                // Si no existe, abrir modal para crearla
-                console.log('Creando nueva tasa para hoy');
-                abrirModalNuevo();
-                tasaFecha.value = fechaHoyISO;
-                tasaFecha.disabled = true; // Bloquear fecha (ya está establecida)
+                    ? formatearDecimales(tasaMasReciente.tasa_bs_por_dolar) 
+                    : parseFloat(tasaMasReciente.tasa_bs_por_dolar).toFixed(2);
             }
         } catch (error) {
             console.error('Error al establecer tasa de hoy:', error);
@@ -532,18 +523,7 @@
                     [fechaFormato, tasaValor, id]
                 );
             } else {
-                // Verificar si ya existe una tasa para esta fecha
-                const existente = await window.electronAPI.dbGet(
-                    'SELECT * FROM TasasCambio WHERE fecha = ?',
-                    [fechaFormato]
-                );
-
-                if (existente) {
-                    mostrarError('Ya existe una tasa para esta fecha');
-                    return;
-                }
-
-                // Crear nuevo
+                // Crear nuevo (se permiten múltiples tasas por día)
                 await window.electronAPI.dbRun(
                     'INSERT INTO TasasCambio (fecha, tasa_bs_por_dolar) VALUES (?, ?)',
                     [fechaFormato, tasaValor]
@@ -578,7 +558,7 @@
     async function actualizarPreciosProductos(tasa) {
         try {
             // Obtener todos los productos
-            const productos = await window.electronAPI.dbQuery('SELECT * FROM Productos');
+            const productos = await window.electronAPI.dbQuery('SELECT * FROM Productos ORDER BY nombre ASC');
             
             if (!productos || productos.length === 0) {
                 console.log('No hay productos para actualizar');
@@ -630,7 +610,7 @@
     async function actualizarPreciosServicios(tasa) {
         try {
             // Obtener todos los servicios
-            const servicios = await window.electronAPI.dbQuery('SELECT * FROM Servicios');
+            const servicios = await window.electronAPI.dbQuery('SELECT * FROM Servicios ORDER BY nombre ASC');
             
             if (!servicios || servicios.length === 0) {
                 console.log('No hay servicios para actualizar');
@@ -775,7 +755,7 @@
                             FROM ConsumosEmpleados ce
                             JOIN Empleados e ON ce.id_empleado = e.id
                             JOIN Productos p ON ce.id_producto = p.id
-                            ORDER BY ce.fecha DESC, ce.id DESC
+                            ORDER BY ce.id DESC
                         `);
                         window.consumosModule.consumos = consumos || [];
                         
@@ -807,9 +787,44 @@
         if (!tasaAEliminar) return;
 
         try {
+            // Obtener la tasa que se va a eliminar para verificar si es de hoy
+            const tasaAEliminarObj = await window.electronAPI.dbGet('SELECT * FROM TasasCambio WHERE id = ?', [tasaAEliminar]);
+            
+            if (!tasaAEliminarObj) {
+                mostrarError('Tasa no encontrada');
+                return;
+            }
+            
+            const esTasaDeHoy = esFechaHoy(tasaAEliminarObj.fecha);
+            
+            // Eliminar la tasa
             await window.electronAPI.dbRun('DELETE FROM TasasCambio WHERE id = ?', [tasaAEliminar]);
             cerrarModalEliminar();
             cargarTasas();
+            await actualizarTasaActual();
+            
+            // Si la tasa eliminada era de hoy, actualizar precios con la nueva tasa más reciente
+            if (esTasaDeHoy) {
+                const hoy = new Date();
+                const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+                
+                // Obtener la nueva tasa más reciente de hoy (si existe)
+                const nuevaTasaHoy = await window.electronAPI.dbGet(
+                    'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+                    [fechaHoy]
+                );
+                
+                if (nuevaTasaHoy) {
+                    console.log('Tasa de hoy eliminada, actualizando precios con la nueva tasa más reciente:', nuevaTasaHoy.tasa_bs_por_dolar);
+                    await actualizarPreciosProductos(nuevaTasaHoy.tasa_bs_por_dolar);
+                    await actualizarPreciosServicios(nuevaTasaHoy.tasa_bs_por_dolar);
+                    await actualizarProductosEnConsumos();
+                    await actualizarPreciosConsumosPendientes(nuevaTasaHoy.tasa_bs_por_dolar);
+                } else {
+                    console.log('Tasa de hoy eliminada, pero no hay más tasas para hoy. Los precios no se actualizarán.');
+                }
+            }
+            
             mostrarExito('Tasa eliminada correctamente');
             tasaAEliminar = null;
         } catch (error) {

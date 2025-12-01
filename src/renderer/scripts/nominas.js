@@ -103,16 +103,15 @@
                 }
             }
 
-            // Calcular cuando cambia el porcentaje
+            // Calcular cuando cambia el porcentaje (slider)
             const porcentajeInput = document.getElementById('nomina-porcentaje');
+            const porcentajeValor = document.getElementById('nomina-porcentaje-valor');
             if (porcentajeInput) {
                 porcentajeInput.oninput = () => {
-                    // Validar que esté entre 1 y 100
-                    let valor = parseInt(porcentajeInput.value) || 100;
-                    if (valor < 1) valor = 1;
-                    if (valor > 100) valor = 100;
-                    if (valor !== parseInt(porcentajeInput.value)) {
-                        porcentajeInput.value = valor;
+                    const valor = parseInt(porcentajeInput.value) || 100;
+                    // Actualizar el valor mostrado
+                    if (porcentajeValor) {
+                        porcentajeValor.textContent = valor;
                     }
                     recalcularTotalConPorcentaje();
                 };
@@ -233,7 +232,7 @@
                     e.nombre || ' ' || e.apellido as nombre_empleado
                 FROM Nominas n
                 JOIN Empleados e ON n.id_empleado = e.id
-                ORDER BY n.fecha_pago DESC, n.id DESC
+                ORDER BY n.id DESC
             `);
             console.log('Nóminas obtenidas:', resultados);
             
@@ -400,6 +399,7 @@
                     -- Si la fecha está en formato ISO (YYYY-MM-DD)
                     strftime('%Y-%m-%d', sr.fecha) = ?
                 )
+                ORDER BY sr.id DESC
             `, [idEmpleado, fechaFormatoComparar, fechaInput]);
             
             // Obtener consumos pendientes del empleado
@@ -411,6 +411,7 @@
                 JOIN Productos p ON ce.id_producto = p.id
                 WHERE ce.id_empleado = ? 
                 AND ce.estado = 'pendiente'
+                ORDER BY ce.id DESC
             `, [idEmpleado]);
 
             window.nominasModule.serviciosRealizados = servicios || [];
@@ -490,7 +491,7 @@
 
         // Obtener tasa del día para calcular comisiones en dólares
         const tasaHoy = await window.electronAPI.dbGet(
-            'SELECT * FROM TasasCambio WHERE fecha = ?',
+            'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
             [fechaFormato]
         );
 
@@ -548,7 +549,14 @@
         document.getElementById('nomina-propinas-bs').value = '';
         document.getElementById('nomina-descuentos').value = '';
         document.getElementById('nomina-subtotal').value = '';
-        document.getElementById('nomina-porcentaje').value = '100';
+        const porcentajeInput = document.getElementById('nomina-porcentaje');
+        const porcentajeValor = document.getElementById('nomina-porcentaje-valor');
+        if (porcentajeInput) {
+            porcentajeInput.value = '100';
+        }
+        if (porcentajeValor) {
+            porcentajeValor.textContent = '100';
+        }
         document.getElementById('nomina-total').value = '';
     }
 
@@ -698,6 +706,7 @@
                 FROM ConsumosEmpleados ce
                 JOIN Productos p ON ce.id_producto = p.id
                 WHERE ce.id_nomina = ?
+                ORDER BY ce.id DESC
             `, [id]);
 
             // Calcular subtotal

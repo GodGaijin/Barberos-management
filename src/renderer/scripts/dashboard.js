@@ -151,7 +151,7 @@
                  FROM Transacciones t
                  LEFT JOIN Clientes c ON t.id_cliente = c.id
                  WHERE t.estado = 'abierta'
-                 ORDER BY t.fecha_apertura DESC
+                 ORDER BY t.id DESC
                  LIMIT 5`
             );
 
@@ -330,7 +330,7 @@
             
             // Verificar si hay tasa del día
             const tasaHoy = await window.electronAPI.dbGet(
-                `SELECT * FROM TasasCambio WHERE fecha = ?`,
+                `SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1`,
                 [fechaHoy]
             );
 
@@ -345,7 +345,7 @@
 
             // Verificar productos con stock bajo
             const productosBajoStock = await window.electronAPI.dbQuery(
-                `SELECT nombre, cantidad FROM Productos WHERE cantidad < 10 AND cantidad > 0`
+                `SELECT nombre, cantidad FROM Productos WHERE cantidad < 10 AND cantidad > 0 ORDER BY nombre ASC`
             );
             if (productosBajoStock.length > 0) {
                 warnings.push({
@@ -358,7 +358,7 @@
 
             // Verificar productos sin stock
             const productosSinStock = await window.electronAPI.dbQuery(
-                `SELECT nombre FROM Productos WHERE cantidad = 0`
+                `SELECT nombre FROM Productos WHERE cantidad = 0 ORDER BY nombre ASC`
             );
             if (productosSinStock.length > 0) {
                 warnings.push({

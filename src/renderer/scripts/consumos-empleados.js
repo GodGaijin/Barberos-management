@@ -223,7 +223,7 @@
                 FROM ConsumosEmpleados ce
                 JOIN Empleados e ON ce.id_empleado = e.id
                 JOIN Productos p ON ce.id_producto = p.id
-                ORDER BY ce.fecha DESC, ce.id DESC
+                ORDER BY ce.id DESC
             `);
             console.log('Consumos obtenidos:', resultados);
             

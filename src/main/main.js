@@ -61,16 +61,27 @@ function createWindow() {
 function initializeDatabase() {
   try {
     const userDataPath = app.getPath('userData');
+    console.log('Inicializando base de datos en:', userDataPath);
     db = new Database(userDataPath);
-    console.log('Base de datos inicializada correctamente');
+    console.log('✅ Base de datos inicializada correctamente');
+    console.log('📊 Base de datos lista para consultas');
   } catch (error) {
-    console.error('Error al inicializar la base de datos:', error);
+    console.error('❌ Error al inicializar la base de datos:', error);
+    console.error('📋 Detalles:', error.message);
+    if (error.stack) {
+      console.error('📋 Stack:', error.stack);
+    }
+    db = null;
   }
 }
 
 // IPC Handlers para comunicación con el renderer
 ipcMain.handle('db-query', async (event, query, params = []) => {
   try {
+    if (!db) {
+      console.error('Base de datos no inicializada en db-query');
+      throw new Error('Base de datos no inicializada');
+    }
     return db.query(query, params);
   } catch (error) {
     console.error('Error en query:', error);
@@ -80,6 +91,10 @@ ipcMain.handle('db-query', async (event, query, params = []) => {
 
 ipcMain.handle('db-run', async (event, query, params = []) => {
   try {
+    if (!db) {
+      console.error('Base de datos no inicializada en db-run');
+      throw new Error('Base de datos no inicializada');
+    }
     return db.run(query, params);
   } catch (error) {
     console.error('Error en run:', error);
@@ -89,6 +104,10 @@ ipcMain.handle('db-run', async (event, query, params = []) => {
 
 ipcMain.handle('db-get', async (event, query, params = []) => {
   try {
+    if (!db) {
+      console.error('Base de datos no inicializada en db-get');
+      throw new Error('Base de datos no inicializada');
+    }
     return db.get(query, params);
   } catch (error) {
     console.error('Error en get:', error);
@@ -326,7 +345,18 @@ function verificarActualizaciones() {
 
 // Cuando Electron esté listo, crear la ventana
 app.whenReady().then(() => {
+  // Inicializar la base de datos primero
   initializeDatabase();
+  
+  // Verificar que la base de datos se inicializó correctamente
+  if (!db) {
+    console.error('❌ CRÍTICO: No se pudo inicializar la base de datos');
+    dialog.showErrorBox(
+      'Error de Base de Datos',
+      'No se pudo inicializar la base de datos. La aplicación puede no funcionar correctamente.'
+    );
+  }
+  
   createWindow();
   
   // Verificar actualizaciones después de que la ventana esté lista (solo en producción)
