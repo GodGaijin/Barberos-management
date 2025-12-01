@@ -33,6 +33,10 @@ builder-effective-config.yaml
 *.sqlite
 *.sqlite3
 
+# Migration files
+for migration/
+database/for-migration/migrate.js
+
 # Logs
 *.log
 npm-debug.log*
