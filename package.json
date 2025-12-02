@@ -1,6 +1,6 @@
 {
   "name": "barberos-management",
-  "version": "2.0.0a",
+  "version": "2.0.1",
   "description": "Sistema de gestión para barbería",
   "main": "src/main/main.js",
   "scripts": {
