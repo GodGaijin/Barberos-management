@@ -12,15 +12,13 @@
             <option value="abierta">Abiertas</option>
             <option value="cerrada">Cerradas</option>
         </select>
-    </div>
-    
-    <!-- Filtros de fecha -->
-    <div class="date-filters" style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
-        <button type="button" class="btn btn-primary date-filter-btn active" data-filter="hoy">Hoy</button>
-        <button type="button" class="btn btn-secondary date-filter-btn" data-filter="ayer">Ayer</button>
-        <button type="button" class="btn btn-secondary date-filter-btn" data-filter="semana">Hace una Semana</button>
-        <button type="button" class="btn btn-secondary date-filter-btn" data-filter="año">Hace un Año</button>
-        <button type="button" class="btn btn-secondary date-filter-btn" data-filter="todas">Todas</button>
+        <select id="filter-fecha" class="filter-select">
+            <option value="hoy" selected>Hoy</option>
+            <option value="ayer">Ayer</option>
+            <option value="semana">Hace una Semana</option>
+            <option value="año">Hace un Año</option>
+            <option value="todas">Todas</option>
+        </select>
     </div>
 
     <!-- Tabla de transacciones -->

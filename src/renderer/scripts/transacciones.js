@@ -296,24 +296,16 @@
                 filterEstado.onchange = filtrarTransacciones;
             }
             
-            // Filtros de fecha
-            const dateFilterButtons = document.querySelectorAll('.date-filter-btn');
-            dateFilterButtons.forEach(btn => {
-                btn.onclick = () => {
-                    // Remover clase active de todos los botones
-                    dateFilterButtons.forEach(b => {
-                        b.classList.remove('active', 'btn-primary');
-                        b.classList.add('btn-secondary');
-                    });
-                    // Añadir clase active al botón seleccionado
-                    btn.classList.add('active', 'btn-primary');
-                    btn.classList.remove('btn-secondary');
-                    // Actualizar filtro de fecha
-                    filtroFechaActual = btn.getAttribute('data-filter');
-                    // Aplicar filtro
+            // Filtro de fecha
+            const filterFecha = document.getElementById('filter-fecha');
+            if (filterFecha) {
+                // Establecer el valor por defecto
+                filtroFechaActual = filterFecha.value;
+                filterFecha.onchange = () => {
+                    filtroFechaActual = filterFecha.value;
                     filtrarTransacciones();
                 };
-            });
+            }
 
             // Confirmar eliminación
             const confirmDelete = document.getElementById('confirm-delete');
@@ -1283,7 +1275,13 @@
     function convertirFechaAComparable(fechaStr) {
         if (!fechaStr) return null;
         
-        // Si ya está en formato DD/MM/YYYY
+        // Si está en formato DD/MM/YYYY HH:MM:SS (con hora)
+        if (fechaStr.includes('/') && fechaStr.includes(' ')) {
+            // Extraer solo la parte de la fecha (antes del espacio)
+            return fechaStr.split(' ')[0];
+        }
+        
+        // Si ya está en formato DD/MM/YYYY (sin hora)
         if (fechaStr.includes('/') && fechaStr.length === 10) {
             return fechaStr;
         }
@@ -1293,6 +1291,9 @@
             let fechaISO = fechaStr;
             if (fechaStr.includes('T')) {
                 fechaISO = fechaStr.split('T')[0];
+            } else if (fechaStr.includes(' ')) {
+                // Si tiene espacio, tomar solo la parte de la fecha
+                fechaISO = fechaStr.split(' ')[0];
             }
             const [year, month, day] = fechaISO.split('-');
             return `${day}/${month}/${year}`;
