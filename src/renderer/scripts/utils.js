@@ -272,6 +272,45 @@ window.forzarCamposEditables = function() {
     // Solo se forzará cuando sea realmente necesario (errores, pérdida de foco, etc.)
 };
 
+// Función de utilidad para renderizar paginación
+window.renderPagination = function(containerId, currentPage, totalPages, onPageChangeFunc) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    let html = '<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; flex-wrap: wrap;">';
+    
+    // Botón anterior
+    if (currentPage > 1) {
+        html += `<button class="btn btn-secondary" onclick="${onPageChangeFunc}(${currentPage - 1})" style="padding: 8px 16px;">« Anterior</button>`;
+    }
+    
+    // Números de página
+    html += '<div style="display: flex; gap: 5px; flex-wrap: wrap;">';
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+            html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'}" onclick="${onPageChangeFunc}(${i})" style="padding: 8px 12px; min-width: 40px;">${i}</button>`;
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+            html += '<span style="padding: 8px; color: var(--text-secondary);">...</span>';
+        }
+    }
+    html += '</div>';
+    
+    // Botón siguiente
+    if (currentPage < totalPages) {
+        html += `<button class="btn btn-secondary" onclick="${onPageChangeFunc}(${currentPage + 1})" style="padding: 8px 16px;">Siguiente »</button>`;
+    }
+    
+    html += `<span style="margin-left: 15px; color: var(--text-secondary);">Página ${currentPage} de ${totalPages}</span>`;
+    html += '</div>';
+    
+    container.innerHTML = html;
+};
+
 // Agregar listener para cuando la ventana recupera el foco
 window.addEventListener('focus', () => {
     // Pequeño delay para asegurar que el DOM esté listo

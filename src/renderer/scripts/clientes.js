@@ -17,6 +17,11 @@
     var clienteEditando = window.clientesModule.clienteEditando;
     var clienteAEliminar = window.clientesModule.clienteAEliminar;
     var initialized = window.clientesModule.initialized;
+    
+    // Variables de paginación
+    let currentPageClientes = 1;
+    const itemsPerPage = 15;
+    let clientesFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
     window.initClientes = function() {
@@ -114,13 +119,24 @@
     // Mostrar clientes en la tabla
     function mostrarClientes(listaClientes) {
         const tbody = document.getElementById('clientes-table-body');
+        if (!tbody) return;
+        
+        // Guardar lista filtrada para paginación
+        clientesFiltrados = listaClientes;
         
         if (listaClientes.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay clientes registrados</td></tr>';
+            window.renderPagination('pagination-clientes', 1, 1, 'window.cambiarPaginaClientes');
             return;
         }
+        
+        // Calcular paginación
+        const totalPages = Math.ceil(listaClientes.length / itemsPerPage);
+        const startIndex = (currentPageClientes - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const clientesPagina = listaClientes.slice(startIndex, endIndex);
 
-        tbody.innerHTML = listaClientes.map((cliente, index) => {
+        tbody.innerHTML = clientesPagina.map((cliente, index) => {
             // Manejar cédula NA (cliente contado)
             let cedulaCompleta;
             if (cliente.tipo_cedula === 'NA' || cliente.cedula === 0) {
@@ -157,25 +173,37 @@
                 </tr>
             `;
         }).join('');
+        
+        // Renderizar paginación
+        window.renderPagination('pagination-clientes', currentPageClientes, totalPages, 'window.cambiarPaginaClientes');
     }
+    
+    // Función para cambiar página de clientes
+    function cambiarPaginaClientes(page) {
+        currentPageClientes = page;
+        mostrarClientes(clientesFiltrados);
+    }
+    
+    // Exponer función de cambio de página
+    window.cambiarPaginaClientes = cambiarPaginaClientes;
 
     // Filtrar clientes
     function filtrarClientes() {
         const searchTerm = document.getElementById('search-cliente').value.toLowerCase();
         const filterType = document.getElementById('filter-tipo-cliente').value;
 
-        let clientesFiltrados = clientes;
+        let clientesFiltradosTemp = clientes;
 
         // Filtrar por tipo
         if (filterType === 'registrado') {
-            clientesFiltrados = clientesFiltrados.filter(c => c.tipo_cedula !== 'NA' && c.cedula !== 0);
+            clientesFiltradosTemp = clientesFiltradosTemp.filter(c => c.tipo_cedula !== 'NA' && c.cedula !== 0);
         } else if (filterType === 'contado') {
-            clientesFiltrados = clientesFiltrados.filter(c => c.tipo_cedula === 'NA' || c.cedula === 0);
+            clientesFiltradosTemp = clientesFiltradosTemp.filter(c => c.tipo_cedula === 'NA' || c.cedula === 0);
         }
 
         // Filtrar por búsqueda
         if (searchTerm) {
-            clientesFiltrados = clientesFiltrados.filter(cliente => {
+            clientesFiltradosTemp = clientesFiltradosTemp.filter(cliente => {
                 const nombre = cliente.nombre.toLowerCase();
                 const apellido = cliente.apellido.toLowerCase();
                 let cedula = 'NA';
@@ -188,7 +216,10 @@
             });
         }
 
-        mostrarClientes(clientesFiltrados);
+        // Resetear página al filtrar
+        currentPageClientes = 1;
+        
+        mostrarClientes(clientesFiltradosTemp);
     }
 
     // Abrir modal para nuevo cliente

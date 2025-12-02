@@ -17,6 +17,11 @@
     var productoEditando = window.productosModule.productoEditando;
     var productoAEliminar = window.productosModule.productoAEliminar;
     var initialized = window.productosModule.initialized;
+    
+    // Variables de paginación
+    let currentPageProductos = 1;
+    const itemsPerPage = 15;
+    let productosFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
     window.initProductos = function() {
@@ -184,17 +189,28 @@
         
         if (!tbody) return;
         
+        // Guardar lista filtrada para paginación
+        productosFiltrados = listaProductos;
+        
         if (listaProductos.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay productos registrados</td></tr>';
+            window.renderPagination('pagination-productos', 1, 1, 'window.cambiarPaginaProductos');
             return;
         }
+        
+        // Calcular paginación
+        const totalPages = Math.ceil(listaProductos.length / itemsPerPage);
+        const startIndex = (currentPageProductos - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const productosPagina = listaProductos.slice(startIndex, endIndex);
 
-        tbody.innerHTML = listaProductos.map((producto, index) => {
+        tbody.innerHTML = productosPagina.map((producto, index) => {
             const stockClass = producto.cantidad === 0 ? 'sin-stock' : producto.cantidad < 10 ? 'stock-bajo' : '';
+            const globalIndex = startIndex + index + 1;
             
             return `
                 <tr class="${stockClass}">
-                    <td>#${index + 1}</td>
+                    <td>#${globalIndex}</td>
                     <td>${producto.nombre}</td>
                     <td>${producto.cantidad}</td>
                     <td>$${parseFloat(producto.referencia_en_dolares).toFixed(2)}</td>
@@ -210,34 +226,47 @@
                 </tr>
             `;
         }).join('');
+        
+        // Renderizar paginación
+        window.renderPagination('pagination-productos', currentPageProductos, totalPages, 'window.cambiarPaginaProductos');
     }
     
-    // Exponer función para uso externo
+    // Función para cambiar página de productos
+    function cambiarPaginaProductos(page) {
+        currentPageProductos = page;
+        mostrarProductos(productosFiltrados);
+    }
+    
+    // Exponer funciones para uso externo
     window.mostrarProductos = mostrarProductos;
+    window.cambiarPaginaProductos = cambiarPaginaProductos;
 
     // Filtrar productos
     function filtrarProductos() {
         const searchTerm = document.getElementById('search-producto').value.toLowerCase();
         const filterStock = document.getElementById('filter-stock').value;
 
-        let productosFiltrados = productos;
+        let productosFiltradosTemp = productos;
 
         // Filtrar por stock
         if (filterStock === 'con-stock') {
-            productosFiltrados = productosFiltrados.filter(p => p.cantidad > 0);
+            productosFiltradosTemp = productosFiltradosTemp.filter(p => p.cantidad > 0);
         } else if (filterStock === 'sin-stock') {
-            productosFiltrados = productosFiltrados.filter(p => p.cantidad === 0);
+            productosFiltradosTemp = productosFiltradosTemp.filter(p => p.cantidad === 0);
         }
 
         // Filtrar por búsqueda
         if (searchTerm) {
-            productosFiltrados = productosFiltrados.filter(producto => {
+            productosFiltradosTemp = productosFiltradosTemp.filter(producto => {
                 const nombre = producto.nombre.toLowerCase();
                 return nombre.includes(searchTerm);
             });
         }
 
-        mostrarProductos(productosFiltrados);
+        // Resetear página al filtrar
+        currentPageProductos = 1;
+        
+        mostrarProductos(productosFiltradosTemp);
     }
 
     // Abrir modal para nuevo producto

@@ -35,6 +35,7 @@
             </tbody>
         </table>
     </div>
+    <div id="pagination-transacciones" class="pagination"></div>
 </div>
 
 <!-- Modal para nueva transacción -->
@@ -48,11 +49,19 @@
             <input type="hidden" id="transaccion-id">
             
             <div class="form-row">
-                <div class="form-group">
+                <div class="form-group" style="flex: 1;">
                     <label for="transaccion-cliente">Cliente *</label>
+                    <div style="position: relative;">
+                        <input type="text" id="transaccion-cliente-search" placeholder="Buscar cliente..." class="search-input" style="width: 100%; color: var(--text-primary); margin-bottom: 8px;">
+                        <div id="clientes-results-dropdown" class="search-results-dropdown" style="display: none;"></div>
+                    </div>
+                    <button type="button" id="btn-buscar-cliente-db" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px; width: 100%;" title="Buscar en base de datos">🔍 Buscar en Base de Datos</button>
                     <select id="transaccion-cliente" name="id_cliente" required>
                         <option value="">Seleccione un cliente...</option>
                     </select>
+                </div>
+                <div class="form-group" style="flex: 0 0 auto; align-self: flex-end;">
+                    <button type="button" id="btn-nuevo-cliente-transaccion" class="btn btn-secondary" style="padding: 8px 16px;">+ Nuevo Cliente</button>
                 </div>
             </div>
 
@@ -61,6 +70,13 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <label style="margin: 0;">Servicios</label>
                     <button type="button" id="btn-agregar-servicio" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">+ Agregar Servicio</button>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <div style="position: relative;">
+                        <input type="text" id="transaccion-servicio-search" placeholder="Buscar servicio..." class="search-input" style="width: 100%; color: var(--text-primary); margin-bottom: 8px;">
+                        <div id="servicios-results-dropdown" class="search-results-dropdown" style="display: none;"></div>
+                    </div>
+                    <button type="button" id="btn-buscar-servicio-db" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px; width: 100%;" title="Buscar en base de datos">🔍 Buscar en Base de Datos</button>
                 </div>
                 <div id="servicios-lista" style="display: flex; flex-direction: column; gap: 15px;">
                     <!-- Los servicios se agregarán aquí dinámicamente -->
@@ -73,8 +89,26 @@
                     <label style="margin: 0;">Productos</label>
                     <button type="button" id="btn-agregar-producto" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">+ Agregar Producto</button>
                 </div>
+                <div style="margin-bottom: 10px;">
+                    <div style="position: relative;">
+                        <input type="text" id="transaccion-producto-search" placeholder="Buscar producto..." class="search-input" style="width: 100%; color: var(--text-primary); margin-bottom: 8px;">
+                        <div id="productos-results-dropdown" class="search-results-dropdown" style="display: none;"></div>
+                    </div>
+                    <button type="button" id="btn-buscar-producto-db" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px; width: 100%;" title="Buscar en base de datos">🔍 Buscar en Base de Datos</button>
+                </div>
                 <div id="productos-lista" style="display: flex; flex-direction: column; gap: 15px;">
                     <!-- Los productos se agregarán aquí dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Propinas -->
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <label style="margin: 0;">Propinas</label>
+                    <button type="button" id="btn-agregar-propina" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">+ Agregar Propina</button>
+                </div>
+                <div id="propinas-lista" style="display: flex; flex-direction: column; gap: 15px;">
+                    <!-- Las propinas se agregarán aquí dinámicamente -->
                 </div>
             </div>
 
@@ -82,6 +116,10 @@
                 <div class="form-group" style="flex: 1;">
                     <label for="transaccion-total-general">Total General (Bs)</label>
                     <input type="text" id="transaccion-total-general" name="total_general" placeholder="0.00" inputmode="decimal" readonly style="font-size: 18px; font-weight: 600;">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="transaccion-total-general-dolares">Total General ($)</label>
+                    <input type="text" id="transaccion-total-general-dolares" name="total_general_dolares" placeholder="0.00" inputmode="decimal" readonly style="font-size: 18px; font-weight: 600;">
                 </div>
             </div>
 
@@ -172,6 +210,24 @@
                 <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block;">Si hay múltiples referencias, sepáralas por coma</small>
             </div>
 
+            <!-- Campos para cantidad pagada en bolívares y dólares -->
+            <div class="form-row">
+                <div class="form-group" style="flex: 1;">
+                    <label for="cerrar-pagado-bs">Cantidad Pagada (Bs)</label>
+                    <input type="text" id="cerrar-pagado-bs" name="pagado_bs" placeholder="000.00" inputmode="decimal" style="text-align: right; direction: rtl;">
+                    <small style="color: var(--text-secondary); font-size: 12px; display: block; margin-top: 5px;">Formato automático de derecha a izquierda</small>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="cerrar-pagado-dolares">Cantidad Pagada ($)</label>
+                    <input type="text" id="cerrar-pagado-dolares" name="pagado_dolares" placeholder="000.00" inputmode="decimal" style="text-align: right; direction: rtl;">
+                    <small style="color: var(--text-secondary); font-size: 12px; display: block; margin-top: 5px;">Formato automático de derecha a izquierda</small>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <p><strong>Nota:</strong> Los campos de cantidad pagada se calcularán automáticamente según los métodos y entidades seleccionados, pero puedes ajustarlos manualmente si es necesario.</p>
+            </div>
+
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="cancel-cerrar">Cancelar</button>
                 <button type="submit" class="btn btn-primary">Cerrar Transacción</button>
@@ -193,6 +249,56 @@
         <div class="modal-actions">
             <button type="button" class="btn btn-secondary" id="cerrar-ver-transaccion">Cerrar</button>
         </div>
+    </div>
+</div>
+
+<!-- Modal para nuevo cliente desde transacciones -->
+<div id="nuevo-cliente-transaccion-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Nuevo Cliente</h3>
+            <button class="modal-close" id="close-nuevo-cliente-modal">&times;</button>
+        </div>
+        <form id="nuevo-cliente-transaccion-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nuevo-cliente-nombre">Nombre *</label>
+                    <input type="text" id="nuevo-cliente-nombre" name="nombre" required>
+                </div>
+                <div class="form-group">
+                    <label for="nuevo-cliente-apellido">Apellido *</label>
+                    <input type="text" id="nuevo-cliente-apellido" name="apellido" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nuevo-cliente-tipo-cedula">Tipo de Cédula *</label>
+                    <select id="nuevo-cliente-tipo-cedula" name="tipo_cedula" required>
+                        <option value="V">V - Venezolano</option>
+                        <option value="E">E - Extranjero</option>
+                        <option value="G">G - Gubernamental</option>
+                        <option value="J">J - Jurídico</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="nuevo-cliente-cedula">Cédula *</label>
+                    <input type="number" id="nuevo-cliente-cedula" name="cedula" required min="0">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nuevo-cliente-telefono">Teléfono</label>
+                    <input type="text" id="nuevo-cliente-telefono" name="telefono" placeholder="Opcional">
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-nuevo-cliente">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar Cliente</button>
+            </div>
+        </form>
     </div>
 </div>
 

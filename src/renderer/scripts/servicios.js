@@ -17,6 +17,11 @@
     var servicioEditando = window.serviciosModule.servicioEditando;
     var servicioAEliminar = window.serviciosModule.servicioAEliminar;
     var initialized = window.serviciosModule.initialized;
+    
+    // Variables de paginación
+    let currentPageServicios = 1;
+    const itemsPerPage = 15;
+    let serviciosFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
     window.initServicios = function() {
@@ -173,17 +178,28 @@
         
         if (!tbody) return;
         
+        // Guardar lista filtrada para paginación
+        serviciosFiltrados = listaServicios;
+        
         if (listaServicios.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay servicios registrados</td></tr>';
+            window.renderPagination('pagination-servicios', 1, 1, 'window.cambiarPaginaServicios');
             return;
         }
+        
+        // Calcular paginación
+        const totalPages = Math.ceil(listaServicios.length / itemsPerPage);
+        const startIndex = (currentPageServicios - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const serviciosPagina = listaServicios.slice(startIndex, endIndex);
 
-        tbody.innerHTML = listaServicios.map((servicio, index) => {
+        tbody.innerHTML = serviciosPagina.map((servicio, index) => {
             const descripcion = servicio.descripcion || '-';
+            const globalIndex = startIndex + index + 1;
             
             return `
                 <tr>
-                    <td>#${index + 1}</td>
+                    <td>#${globalIndex}</td>
                     <td>${servicio.nombre}</td>
                     <td>${descripcion}</td>
                     <td>$${parseFloat(servicio.referencia_en_dolares).toFixed(2)}</td>
@@ -199,27 +215,40 @@
                 </tr>
             `;
         }).join('');
+        
+        // Renderizar paginación
+        window.renderPagination('pagination-servicios', currentPageServicios, totalPages, 'window.cambiarPaginaServicios');
     }
     
-    // Exponer función para uso externo
+    // Función para cambiar página de servicios
+    function cambiarPaginaServicios(page) {
+        currentPageServicios = page;
+        mostrarServicios(serviciosFiltrados);
+    }
+    
+    // Exponer funciones para uso externo
     window.mostrarServicios = mostrarServicios;
+    window.cambiarPaginaServicios = cambiarPaginaServicios;
 
     // Filtrar servicios
     function filtrarServicios() {
         const searchTerm = document.getElementById('search-servicio').value.toLowerCase();
 
-        let serviciosFiltrados = servicios;
+        let serviciosFiltradosTemp = servicios;
 
         // Filtrar por búsqueda
         if (searchTerm) {
-            serviciosFiltrados = serviciosFiltrados.filter(servicio => {
+            serviciosFiltradosTemp = serviciosFiltradosTemp.filter(servicio => {
                 const nombre = servicio.nombre.toLowerCase();
                 const descripcion = (servicio.descripcion || '').toLowerCase();
                 return nombre.includes(searchTerm) || descripcion.includes(searchTerm);
             });
         }
 
-        mostrarServicios(serviciosFiltrados);
+        // Resetear página al filtrar
+        currentPageServicios = 1;
+        
+        mostrarServicios(serviciosFiltradosTemp);
     }
 
     // Abrir modal para nuevo servicio

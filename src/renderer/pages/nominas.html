@@ -13,29 +13,63 @@
         <input type="date" id="filter-fecha" class="filter-select" style="max-width: 200px;">
     </div>
 
-    <!-- Tabla de nóminas -->
-    <div class="table-container">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Empleado</th>
-                    <th>Fecha de Pago</th>
-                    <th>Comisiones Ref. ($)</th>
-                    <th>Comisiones (Bs)</th>
-                    <th>Propinas Ref. ($)</th>
-                    <th>Propinas (Bs)</th>
-                    <th>Descuentos (Bs)</th>
-                    <th>Total Pagado (Bs)</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody id="nominas-table-body">
-                <tr>
-                    <td colspan="10" class="loading">Cargando nóminas...</td>
-                </tr>
-            </tbody>
-        </table>
+    <!-- Nóminas separadas por moneda -->
+    <div id="nominas-container">
+        <!-- Nóminas en Bolívares -->
+        <div id="nominas-bs-section" style="margin-bottom: 30px;">
+            <h3 style="margin-bottom: 15px; color: var(--text-primary);">Nóminas Pagadas en Bolívares</h3>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Empleado</th>
+                            <th>Fecha de Pago</th>
+                            <th>Comisiones (Bs)</th>
+                            <th>Propinas (Bs)</th>
+                            <th>Descuentos (Bs)</th>
+                            <th>Total Pagado (Bs)</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nominas-table-body-bs">
+                        <tr>
+                            <td colspan="9" class="loading">Cargando nóminas...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="pagination-bs" class="pagination"></div>
+        </div>
+
+        <!-- Nóminas en Dólares -->
+        <div id="nominas-dolares-section" style="margin-bottom: 30px;">
+            <h3 style="margin-bottom: 15px; color: var(--text-primary);">Nóminas Pagadas en Dólares</h3>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Empleado</th>
+                            <th>Fecha de Pago</th>
+                            <th>Comisiones Ref. ($)</th>
+                            <th>Propinas Ref. ($)</th>
+                            <th>Total Pagado ($)</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nominas-table-body-dolares">
+                        <tr>
+                            <td colspan="8" class="loading">Cargando nóminas...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="pagination-dolares" class="pagination"></div>
+        </div>
+
     </div>
 </div>
 
@@ -80,33 +114,33 @@
 
             <!-- Totales calculados -->
             <div class="form-row">
-                <div class="form-group" style="flex: 1;">
+                <div class="form-group campo-dolares" style="flex: 1;">
                     <label>Comisiones Ref. ($)</label>
                     <input type="text" id="nomina-comisiones-dolares" name="comisiones_dolares" placeholder="0.00" readonly>
                 </div>
-                <div class="form-group" style="flex: 1;">
+                <div class="form-group campo-bolivares" style="flex: 1;">
                     <label>Comisiones (Bs)</label>
                     <input type="text" id="nomina-comisiones-bs" name="comisiones_bs" placeholder="0.00" readonly>
                 </div>
             </div>
 
             <div class="form-row">
-                <div class="form-group" style="flex: 1;">
+                <div class="form-group campo-dolares" style="flex: 1;">
                     <label>Propinas Ref. ($)</label>
                     <input type="text" id="nomina-propinas-dolares" name="propinas_dolares" placeholder="0.00" readonly>
                 </div>
-                <div class="form-group" style="flex: 1;">
+                <div class="form-group campo-bolivares" style="flex: 1;">
                     <label>Propinas (Bs)</label>
                     <input type="text" id="nomina-propinas-bs" name="propinas_bs" placeholder="0.00" readonly>
                 </div>
             </div>
 
             <div class="form-row">
-                <div class="form-group" style="flex: 1;">
+                <div class="form-group campo-bolivares" style="flex: 1;">
                     <label>Descuentos Consumos (Bs)</label>
                     <input type="text" id="nomina-descuentos" name="descuentos" placeholder="0.00" readonly>
                 </div>
-                <div class="form-group" style="flex: 1;">
+                <div class="form-group campo-bolivares" style="flex: 1;">
                     <label>Subtotal (Bs)</label>
                     <input type="text" id="nomina-subtotal" name="subtotal" placeholder="0.00" readonly>
                 </div>
@@ -114,31 +148,48 @@
 
             <div class="form-row">
                 <div class="form-group" style="flex: 1;">
-                    <label>Porcentaje a Pagar: <span id="nomina-porcentaje-valor">100</span>% *</label>
-                    <input type="range" id="nomina-porcentaje" name="porcentaje" min="1" max="100" value="100" required style="width: 100%; margin: 10px 0;">
-                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary);">
-                        <span>1%</span>
-                        <span>50%</span>
-                        <span>100%</span>
-                    </div>
+                    <label>Porcentaje a Pagar: <span id="nomina-porcentaje-valor">60</span>% (Fijo)</label>
+                    <input type="text" id="nomina-porcentaje" name="porcentaje" value="60" readonly style="background: var(--bg-secondary);">
                 </div>
-                <div class="form-group" style="flex: 1;">
+                <div class="form-group campo-bolivares" style="flex: 1;">
                     <label>Total a Pagar (Bs) *</label>
                     <input type="text" id="nomina-total" name="total_pagado" placeholder="0.00" readonly style="font-size: 18px; font-weight: 600;">
                 </div>
             </div>
-
-            <div id="nomina-advertencia" style="display: none; background: #dc3545; color: #333; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
-                <p style="margin: 0; font-weight: 600;">⚠️ Ya existe una nómina para este empleado en esta fecha. No se puede crear otra nómina.</p>
+            
+            <div class="form-row">
+                <div class="form-group campo-dolares" style="flex: 1;">
+                    <label>Total a Pagar ($) *</label>
+                    <input type="text" id="nomina-total-dolares" name="total_pagado_dolares" placeholder="0.00" readonly style="font-size: 18px; font-weight: 600;">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Moneda de Pago *</label>
+                    <select id="nomina-moneda-pago" name="moneda_pago" required>
+                        <option value="bs">Bolívares (Bs)</option>
+                        <option value="dolares">Dólares ($)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group" style="flex: 1;">
+                    <label>Estado de Pago</label>
+                    <select id="nomina-estado-pago" name="estado_pago" required>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="pagado">Pagado</option>
+                    </select>
+                </div>
             </div>
 
+
             <div class="info-box">
-                <p><strong>Nota:</strong> Los valores se calculan automáticamente según los servicios realizados y consumos pendientes del empleado en la fecha seleccionada. Al guardar, se marcarán los consumos como pagados.</p>
+                <p><strong>Nota:</strong> Los valores se calculan automáticamente según los servicios realizados y consumos pendientes del empleado. Las nóminas incluyen todo lo pendiente de días anteriores. El porcentaje a pagar es siempre 60% fijo. Las propinas NO se descuentan del total final.</p>
             </div>
 
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="cancel-nomina">Cancelar</button>
                 <button type="button" class="btn btn-primary" id="guardar-nomina">Guardar Nómina</button>
+                <button type="button" class="btn btn-success" id="pagar-nomina" style="display: none;">Marcar como Pagado</button>
             </div>
         </form>
     </div>

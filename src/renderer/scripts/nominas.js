@@ -103,18 +103,20 @@
                 }
             }
 
-            // Calcular cuando cambia el porcentaje (slider)
-            const porcentajeInput = document.getElementById('nomina-porcentaje');
-            const porcentajeValor = document.getElementById('nomina-porcentaje-valor');
-            if (porcentajeInput) {
-                porcentajeInput.oninput = () => {
-                    const valor = parseInt(porcentajeInput.value) || 100;
-                    // Actualizar el valor mostrado
-                    if (porcentajeValor) {
-                        porcentajeValor.textContent = valor;
-                    }
-                    recalcularTotalConPorcentaje();
+            // Botón pagar nómina
+            const btnPagarNomina = document.getElementById('pagar-nomina');
+            if (btnPagarNomina) {
+                btnPagarNomina.onclick = () => {
+                    marcarNominaComoPagada();
                 };
+            }
+
+            // Cambiar visibilidad de campos según moneda de pago
+            const monedaPagoSelect = document.getElementById('nomina-moneda-pago');
+            if (monedaPagoSelect) {
+                monedaPagoSelect.onchange = actualizarVisibilidadCamposMoneda;
+                // Ejecutar al inicio para establecer el estado inicial
+                actualizarVisibilidadCamposMoneda();
             }
 
             // Búsqueda y filtros
@@ -218,7 +220,7 @@
             console.log('Iniciando carga de nóminas...');
             const tbody = document.getElementById('nominas-table-body');
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="8" class="loading">Cargando nóminas...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="loading">Cargando nóminas...</td></tr>';
             }
             
             if (!window.electronAPI || !window.electronAPI.dbQuery) {
@@ -246,24 +248,111 @@
             console.error('Error al cargar nóminas:', error);
             const tbody = document.getElementById('nominas-table-body');
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="10" class="error-message">Error al cargar las nóminas: ' + (error.message || error) + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="error-message">Error al cargar las nóminas: ' + (error.message || error) + '</td></tr>';
             }
             mostrarError('Error al cargar las nóminas: ' + (error.message || error));
         }
     }
 
-    // Mostrar nóminas en la tabla
-    function mostrarNominas(listaNominas) {
-        const tbody = document.getElementById('nominas-table-body');
+    // Variables de paginación
+    let currentPageBs = 1;
+    let currentPageDolares = 1;
+    const itemsPerPage = 15;
+
+    // Función de paginación genérica
+    function renderPagination(containerId, currentPage, totalPages, onPageChangeFunc) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
         
+        if (totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        let html = '<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; flex-wrap: wrap;">';
+        
+        // Botón anterior
+        if (currentPage > 1) {
+            html += `<button class="btn btn-secondary" onclick="${onPageChangeFunc}(${currentPage - 1})" style="padding: 8px 16px;">« Anterior</button>`;
+        }
+        
+        // Números de página
+        html += '<div style="display: flex; gap: 5px; flex-wrap: wrap;">';
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'}" onclick="${onPageChangeFunc}(${i})" style="padding: 8px 12px; min-width: 40px;">${i}</button>`;
+            } else if (i === currentPage - 3 || i === currentPage + 3) {
+                html += '<span style="padding: 8px; color: var(--text-secondary);">...</span>';
+            }
+        }
+        html += '</div>';
+        
+        // Botón siguiente
+        if (currentPage < totalPages) {
+            html += `<button class="btn btn-secondary" onclick="${onPageChangeFunc}(${currentPage + 1})" style="padding: 8px 16px;">Siguiente »</button>`;
+        }
+        
+        html += `<span style="margin-left: 15px; color: var(--text-secondary);">Página ${currentPage} de ${totalPages}</span>`;
+        html += '</div>';
+        
+        container.innerHTML = html;
+    }
+    
+    // Exponer funciones de cambio de página
+    window.cambiarPaginaBs = cambiarPaginaBs;
+    window.cambiarPaginaDolares = cambiarPaginaDolares;
+
+    // Almacenar listas filtradas para paginación
+    let nominasBsFiltradas = [];
+    let nominasDolaresFiltradas = [];
+
+    // Mostrar nóminas separadas por moneda con paginación
+    function mostrarNominas(listaNominas) {
+        // Separar nóminas por moneda (solo Bs y $, no mixto)
+        nominasBsFiltradas = listaNominas.filter(n => (n.moneda_pago || 'bs') === 'bs');
+        nominasDolaresFiltradas = listaNominas.filter(n => (n.moneda_pago || 'bs') === 'dolares');
+        
+        // Resetear páginas al cargar nuevas nóminas
+        currentPageBs = 1;
+        currentPageDolares = 1;
+        
+        // Mostrar nóminas en bolívares
+        mostrarNominasPorMoneda(nominasBsFiltradas, 'nominas-table-body-bs', 'bs', currentPageBs);
+        
+        // Mostrar nóminas en dólares
+        mostrarNominasPorMoneda(nominasDolaresFiltradas, 'nominas-table-body-dolares', 'dolares', currentPageDolares);
+    }
+    
+    // Funciones de cambio de página
+    function cambiarPaginaBs(page) {
+        currentPageBs = page;
+        mostrarNominasPorMoneda(nominasBsFiltradas, 'nominas-table-body-bs', 'bs', currentPageBs);
+    }
+    
+    function cambiarPaginaDolares(page) {
+        currentPageDolares = page;
+        mostrarNominasPorMoneda(nominasDolaresFiltradas, 'nominas-table-body-dolares', 'dolares', currentPageDolares);
+    }
+    
+    // Mostrar nóminas por moneda con paginación
+    function mostrarNominasPorMoneda(listaNominas, tbodyId, tipoMoneda, currentPage) {
+        const tbody = document.getElementById(tbodyId);
         if (!tbody) return;
         
-            if (listaNominas.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No hay nóminas registradas</td></tr>';
-                return;
-            }
-
-        tbody.innerHTML = listaNominas.map((nomina, index) => {
+        if (listaNominas.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${tipoMoneda === 'bs' ? 9 : tipoMoneda === 'dolares' ? 8 : 12}" class="empty-state">No hay nóminas registradas</td></tr>`;
+            renderPagination(`pagination-${tipoMoneda}`, 1, 1, `window.cambiarPagina${tipoMoneda.charAt(0).toUpperCase() + tipoMoneda.slice(1)}`);
+            return;
+        }
+        
+        // Calcular paginación
+        const totalPages = Math.ceil(listaNominas.length / itemsPerPage);
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const nominasPagina = listaNominas.slice(startIndex, endIndex);
+        
+        // Renderizar tabla
+        tbody.innerHTML = nominasPagina.map((nomina, index) => {
             // Formatear fecha
             let fechaPago = nomina.fecha_pago;
             if (fechaPago.includes('-')) {
@@ -271,28 +360,91 @@
                 fechaPago = `${day}/${month}/${year}`;
             }
             
-            return `
-                <tr>
-                    <td>#${index + 1}</td>
-                    <td>${nomina.nombre_empleado}</td>
-                    <td>${fechaPago}</td>
-                    <td>$${parseFloat(nomina.comisiones_referencia_en_dolares || 0).toFixed(2)}</td>
-                    <td>${parseFloat(nomina.comisiones_bs || 0).toFixed(2)} Bs</td>
-                    <td>$${parseFloat(nomina.propina_en_dolares || 0).toFixed(2)}</td>
-                    <td>${parseFloat(nomina.propina_bs || 0).toFixed(2)} Bs</td>
-                    <td>${parseFloat(nomina.descuentos_consumos_bs || 0).toFixed(2)} Bs</td>
-                    <td><strong>${parseFloat(nomina.total_pagado_bs || 0).toFixed(2)} Bs</strong></td>
-                    <td class="actions">
-                        <button class="btn-icon btn-view" onclick="window.verNomina(${nomina.id})" title="Ver Detalles">
-                            👁️
-                        </button>
-                        <button class="btn-icon btn-delete" onclick="window.eliminarNomina(${nomina.id})" title="Eliminar">
-                            🗑️
-                        </button>
-                    </td>
-                </tr>
-            `;
+            const estadoPago = nomina.estado_pago || 'pendiente';
+            const estadoClass = estadoPago === 'pagado' ? 'estado-pagado' : 'estado-pendiente';
+            const estadoText = estadoPago === 'pagado' ? 'Pagado' : 'Pendiente';
+            const globalIndex = startIndex + index + 1;
+            
+            if (tipoMoneda === 'bs') {
+                return `
+                    <tr>
+                        <td>#${globalIndex}</td>
+                        <td>${nomina.nombre_empleado}</td>
+                        <td>${fechaPago}</td>
+                        <td>${parseFloat(nomina.comisiones_bs || 0).toFixed(2)} Bs</td>
+                        <td>${parseFloat(nomina.propina_bs || 0).toFixed(2)} Bs</td>
+                        <td>${parseFloat(nomina.descuentos_consumos_bs || 0).toFixed(2)} Bs</td>
+                        <td><strong>${parseFloat(nomina.total_pagado_bs || 0).toFixed(2)} Bs</strong></td>
+                        <td><span class="badge ${estadoClass}">${estadoText}</span></td>
+                        <td class="actions">
+                            <button class="btn-icon btn-edit" onclick="window.editarNomina(${nomina.id})" title="Editar">
+                                ✏️
+                            </button>
+                            <button class="btn-icon btn-view" onclick="window.verNomina(${nomina.id})" title="Ver Detalles">
+                                👁️
+                            </button>
+                            <button class="btn-icon btn-delete" onclick="window.eliminarNomina(${nomina.id})" title="Eliminar">
+                                🗑️
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            } else if (tipoMoneda === 'dolares') {
+                return `
+                    <tr>
+                        <td>#${globalIndex}</td>
+                        <td>${nomina.nombre_empleado}</td>
+                        <td>${fechaPago}</td>
+                        <td>$${parseFloat(nomina.comisiones_referencia_en_dolares || 0).toFixed(2)}</td>
+                        <td>$${parseFloat(nomina.propina_en_dolares || 0).toFixed(2)}</td>
+                        <td><strong>$${parseFloat(nomina.total_pagado_dolares || 0).toFixed(2)}</strong></td>
+                        <td><span class="badge ${estadoClass}">${estadoText}</span></td>
+                        <td class="actions">
+                            <button class="btn-icon btn-edit" onclick="window.editarNomina(${nomina.id})" title="Editar">
+                                ✏️
+                            </button>
+                            <button class="btn-icon btn-view" onclick="window.verNomina(${nomina.id})" title="Ver Detalles">
+                                👁️
+                            </button>
+                            <button class="btn-icon btn-delete" onclick="window.eliminarNomina(${nomina.id})" title="Eliminar">
+                                🗑️
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            } else { // mixto
+                return `
+                    <tr>
+                        <td>#${globalIndex}</td>
+                        <td>${nomina.nombre_empleado}</td>
+                        <td>${fechaPago}</td>
+                        <td>${parseFloat(nomina.comisiones_bs || 0).toFixed(2)} Bs</td>
+                        <td>$${parseFloat(nomina.comisiones_referencia_en_dolares || 0).toFixed(2)}</td>
+                        <td>${parseFloat(nomina.propina_bs || 0).toFixed(2)} Bs</td>
+                        <td>$${parseFloat(nomina.propina_en_dolares || 0).toFixed(2)}</td>
+                        <td>${parseFloat(nomina.descuentos_consumos_bs || 0).toFixed(2)} Bs</td>
+                        <td><strong>${parseFloat(nomina.total_pagado_bs || 0).toFixed(2)} Bs</strong></td>
+                        <td><strong>$${parseFloat(nomina.total_pagado_dolares || 0).toFixed(2)}</strong></td>
+                        <td><span class="badge ${estadoClass}">${estadoText}</span></td>
+                        <td class="actions">
+                            <button class="btn-icon btn-edit" onclick="window.editarNomina(${nomina.id})" title="Editar">
+                                ✏️
+                            </button>
+                            <button class="btn-icon btn-view" onclick="window.verNomina(${nomina.id})" title="Ver Detalles">
+                                👁️
+                            </button>
+                            <button class="btn-icon btn-delete" onclick="window.eliminarNomina(${nomina.id})" title="Eliminar">
+                                🗑️
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
         }).join('');
+        
+        // Renderizar paginación
+        const funcionCambio = tipoMoneda === 'bs' ? 'cambiarPaginaBs' : 'cambiarPaginaDolares';
+        renderPagination(`pagination-${tipoMoneda}`, currentPage, totalPages, `window.${funcionCambio}`);
     }
     
     // Exponer función para uso externo
@@ -327,25 +479,17 @@
             });
         }
 
+        // Resetear páginas al filtrar
+        currentPageBs = 1;
+        currentPageDolares = 1;
+
         mostrarNominas(nominasFiltradas);
     }
 
-    // Validar si ya existe una nómina para este empleado en esta fecha
+    // Validar si ya existe una nómina para este empleado en esta fecha (ya no se valida, se permite múltiples)
     async function validarNominaExistente(idEmpleado, fechaFormato) {
-        if (!idEmpleado || !fechaFormato) {
-            return false;
-        }
-
-        try {
-            const nominaExistente = await window.electronAPI.dbGet(
-                'SELECT * FROM Nominas WHERE id_empleado = ? AND fecha_pago = ?',
-                [idEmpleado, fechaFormato]
-            );
-            return !!nominaExistente;
-        } catch (error) {
-            console.error('Error al validar nómina existente:', error);
-            return false;
-        }
+        // Ya no validamos, permitimos múltiples nóminas por día
+        return false;
     }
 
     // Calcular nómina basada en servicios realizados y consumos
@@ -364,45 +508,178 @@
         const [year, month, day] = fechaInput.split('-');
         const fechaFormato = `${day}/${month}/${year}`;
 
-        // Validar si ya existe una nómina
-        const existeNomina = await validarNominaExistente(idEmpleado, fechaFormato);
-        
-        if (existeNomina) {
-            mostrarAdvertencia();
-            limpiarCamposNomina();
-            return;
-        } else {
-            ocultarAdvertencia();
-        }
+        // Ya no validamos nóminas existentes, permitimos múltiples por día
+        ocultarAdvertencia();
 
         try {
-            // Obtener servicios realizados del empleado en esa fecha
-            // La fecha en ServiciosRealizados puede estar en formato DD/MM/YYYY HH:MM:SS o ISO
-            // Convertir fechaInput (YYYY-MM-DD) a formato DD/MM/YYYY para comparar
-            const [year, month, day] = fechaInput.split('-');
-            const fechaFormatoComparar = `${day}/${month}/${year}`;
-            
+            // Obtener servicios realizados del empleado PENDIENTES (no incluidos en nóminas anteriores)
+            // Buscar servicios que no están asociados a ninguna nómina pagada
+            // Usamos LEFT JOIN para incluir servicios sin id_servicio (propinas independientes)
+            // Incluir información de cómo se pagó la transacción (pagado_bs y pagado_dolares)
+            // Para propinas independientes, incluir incluso si la transacción está abierta
             const servicios = await window.electronAPI.dbQuery(`
                 SELECT 
-                    sr.*,
-                    s.nombre as nombre_servicio,
-                    t.fecha_apertura
+                    sr.id,
+                    sr.id_transaccion,
+                    sr.id_empleado,
+                    sr.id_servicio,
+                    sr.fecha,
+                    sr.precio_cobrado,
+                    sr.propina,
+                    COALESCE(sr.propina_en_dolares, 0) as propina_en_dolares,
+                    sr.estado,
+                    COALESCE(s.nombre, 'Propina Independiente') as nombre_servicio,
+                    COALESCE(s.referencia_en_dolares, 0) as servicio_referencia_dolares,
+                    t.fecha_apertura,
+                    COALESCE(t.pagado_bs, 0) as transaccion_pagado_bs,
+                    COALESCE(t.pagado_dolares, 0) as transaccion_pagado_dolares,
+                    COALESCE(t.total_en_bs, 0) as transaccion_total_bs,
+                    COALESCE(t.total_en_dolares, 0) as transaccion_total_dolares,
+                    t.estado as transaccion_estado
                 FROM ServiciosRealizados sr
-                JOIN Servicios s ON sr.id_servicio = s.id
+                LEFT JOIN Servicios s ON sr.id_servicio = s.id
                 JOIN Transacciones t ON sr.id_transaccion = t.id
                 WHERE sr.id_empleado = ? 
                 AND sr.estado = 'completado'
                 AND (
-                    -- Si la fecha está en formato DD/MM/YYYY HH:MM:SS
-                    sr.fecha LIKE ? || '%'
+                    -- Incluir servicios de transacciones cerradas
+                    (t.estado = 'cerrada')
                     OR
-                    -- Si la fecha está en formato ISO (YYYY-MM-DD)
-                    strftime('%Y-%m-%d', sr.fecha) = ?
+                    -- Incluir propinas independientes incluso si la transacción está abierta
+                    (sr.id_servicio IS NULL OR sr.id_servicio = 0)
                 )
                 ORDER BY sr.id DESC
-            `, [idEmpleado, fechaFormatoComparar, fechaInput]);
+            `, [idEmpleado]);
             
-            // Obtener consumos pendientes del empleado
+            // Obtener todas las nóminas pagadas del empleado para verificar qué servicios ya fueron pagados
+            const nominasPagadas = await window.electronAPI.dbQuery(`
+                SELECT id, fecha_pago, moneda_pago, estado_pago
+                FROM Nominas
+                WHERE id_empleado = ? 
+                AND estado_pago = 'pagado'
+                ORDER BY fecha_pago DESC
+            `, [idEmpleado]);
+            
+            console.log('Nóminas pagadas encontradas:', nominasPagadas.length, nominasPagadas);
+            
+            // Función auxiliar para convertir fecha a objeto Date para comparación
+            const parsearFecha = (fechaStr) => {
+                if (!fechaStr) return null;
+                
+                // Extraer solo la parte de la fecha (sin hora)
+                const fechaParte = fechaStr.split(' ')[0];
+                
+                // Intentar formato DD/MM/YYYY
+                if (fechaParte.includes('/')) {
+                    const partes = fechaParte.split('/');
+                    if (partes.length === 3) {
+                        const [dia, mes, año] = partes;
+                        return new Date(parseInt(año), parseInt(mes) - 1, parseInt(dia));
+                    }
+                }
+                
+                // Intentar formato YYYY-MM-DD
+                if (fechaParte.includes('-')) {
+                    const partes = fechaParte.split('-');
+                    if (partes.length === 3) {
+                        const [año, mes, dia] = partes;
+                        return new Date(parseInt(año), parseInt(mes) - 1, parseInt(dia));
+                    }
+                }
+                
+                return null;
+            };
+            
+            // Filtrar servicios que ya fueron pagados completamente según su moneda de pago
+            // La lógica: si hay una nómina pagada en la moneda correspondiente que sea posterior o igual
+            // a la fecha del servicio, entonces ese servicio ya fue pagado en esa moneda
+            const serviciosPendientes = servicios.filter(servicio => {
+                const transaccionPagadoBs = parseFloat(servicio.transaccion_pagado_bs || 0);
+                const transaccionPagadoDolares = parseFloat(servicio.transaccion_pagado_dolares || 0);
+                const transaccionEstado = servicio.transaccion_estado || 'cerrada';
+                
+                // Si la transacción está abierta y es propina independiente, usar totales
+                let pagadoBs = transaccionPagadoBs;
+                let pagadoDolares = transaccionPagadoDolares;
+                if (transaccionEstado !== 'cerrada' && (!servicio.id_servicio || servicio.id_servicio === 0)) {
+                    pagadoBs = parseFloat(servicio.transaccion_total_bs || 0);
+                    pagadoDolares = parseFloat(servicio.transaccion_total_dolares || 0);
+                }
+                
+                // Determinar cómo se pagó el servicio
+                const sePagoSoloEnBs = pagadoBs > 0 && pagadoDolares === 0;
+                const sePagoSoloEnDolares = pagadoDolares > 0 && pagadoBs === 0;
+                const sePagoMixto = pagadoBs > 0 && pagadoDolares > 0;
+                
+                // Obtener la fecha del servicio
+                let fechaServicio = servicio.fecha || servicio.fecha_apertura;
+                const fechaServicioDate = parsearFecha(fechaServicio);
+                
+                // Si no podemos parsear la fecha del servicio, incluir el servicio por seguridad
+                if (!fechaServicioDate) {
+                    console.warn('No se pudo parsear la fecha del servicio:', fechaServicio);
+                    return true;
+                }
+                
+                // Verificar si ya existe una nómina pagada que incluya este servicio
+                let yaPagadoBs = false;
+                let yaPagadoDolares = false;
+                
+                for (const nomina of nominasPagadas) {
+                    const fechaNominaDate = parsearFecha(nomina.fecha_pago);
+                    
+                    // Si no podemos parsear la fecha de la nómina, continuar con la siguiente
+                    if (!fechaNominaDate) {
+                        console.warn('No se pudo parsear la fecha de la nómina:', nomina.fecha_pago);
+                        continue;
+                    }
+                    
+                    // Si la nómina es posterior o igual a la fecha del servicio, podría haberlo incluido
+                    // (las nóminas incluyen todos los servicios pendientes hasta su fecha)
+                    if (fechaNominaDate >= fechaServicioDate) {
+                        if (nomina.moneda_pago === 'bs' || nomina.moneda_pago === 'mixto') {
+                            yaPagadoBs = true;
+                            console.log(`Servicio ${servicio.id} marcado como pagado en Bs por nómina ${nomina.id} (fecha: ${nomina.fecha_pago})`);
+                        }
+                        if (nomina.moneda_pago === 'dolares' || nomina.moneda_pago === 'mixto') {
+                            yaPagadoDolares = true;
+                            console.log(`Servicio ${servicio.id} marcado como pagado en $ por nómina ${nomina.id} (fecha: ${nomina.fecha_pago})`);
+                        }
+                    }
+                }
+                
+                // Determinar si el servicio debe incluirse (pendiente) o excluirse (ya pagado)
+                let incluirServicio = true;
+                
+                // Si el servicio se pagó solo en bolívares, verificar si ya se pagó en Bs
+                if (sePagoSoloEnBs) {
+                    incluirServicio = !yaPagadoBs; // Incluir solo si NO está pagado en Bs
+                }
+                // Si el servicio se pagó solo en dólares, verificar si ya se pagó en $
+                else if (sePagoSoloEnDolares) {
+                    incluirServicio = !yaPagadoDolares; // Incluir solo si NO está pagado en $
+                }
+                // Si el servicio se pagó mixto, verificar si ambas partes ya fueron pagadas
+                else if (sePagoMixto) {
+                    // Incluir si NO ambas partes están pagadas
+                    // Si solo se pagó en bolívares, la parte en dólares sigue pendiente
+                    incluirServicio = !(yaPagadoBs && yaPagadoDolares);
+                }
+                // Si no hay información de cómo se pagó el servicio, verificar si hay alguna nómina pagada
+                else if (nominasPagadas.length > 0) {
+                    const tieneNominaPosterior = nominasPagadas.some(n => {
+                        const fechaNominaDate = parsearFecha(n.fecha_pago);
+                        return fechaNominaDate && fechaNominaDate >= fechaServicioDate;
+                    });
+                    incluirServicio = !tieneNominaPosterior;
+                }
+                
+                console.log(`Servicio ${servicio.id}: fecha=${fechaServicio}, sePagoSoloEnBs=${sePagoSoloEnBs}, sePagoSoloEnDolares=${sePagoSoloEnDolares}, sePagoMixto=${sePagoMixto}, yaPagadoBs=${yaPagadoBs}, yaPagadoDolares=${yaPagadoDolares}, incluirServicio=${incluirServicio}`);
+                
+                return incluirServicio;
+            });
+            
+            // Obtener consumos pendientes del empleado (todos los pendientes, sin importar fecha)
             const consumos = await window.electronAPI.dbQuery(`
                 SELECT 
                     ce.*,
@@ -414,7 +691,7 @@
                 ORDER BY ce.id DESC
             `, [idEmpleado]);
 
-            window.nominasModule.serviciosRealizados = servicios || [];
+            window.nominasModule.serviciosRealizados = serviciosPendientes || [];
             window.nominasModule.consumosPendientes = consumos || [];
             
             serviciosRealizados.length = 0;
@@ -427,12 +704,12 @@
                 consumosPendientes.push(...window.nominasModule.consumosPendientes);
             }
 
-            // Mostrar resúmenes
-            mostrarResumenServicios(servicios);
+            // Mostrar resúmenes (usar serviciosPendientes, no servicios)
+            mostrarResumenServicios(serviciosPendientes);
             mostrarResumenConsumos(consumos);
 
-            // Calcular totales
-            calcularTotales(servicios, consumos, fechaFormato);
+            // Calcular totales (usar serviciosPendientes, no servicios)
+            calcularTotales(serviciosPendientes, consumos, fechaFormato);
         } catch (error) {
             console.error('Error al calcular nómina:', error);
             mostrarError('Error al calcular la nómina: ' + (error.message || error));
@@ -450,7 +727,19 @@
         }
         
         resumen.innerHTML = servicios.map(s => {
-            return `<p><strong>${s.nombre_servicio}</strong> - Precio: ${parseFloat(s.precio_cobrado).toFixed(2)} Bs - Propina: ${parseFloat(s.propina || 0).toFixed(2)} Bs</p>`;
+            const esPropinaIndependiente = !s.id_servicio || s.id_servicio === 0;
+            const precioTexto = esPropinaIndependiente ? 'Propina Independiente' : `Precio: ${parseFloat(s.precio_cobrado).toFixed(2)} Bs`;
+            const propinaBs = parseFloat(s.propina || 0).toFixed(2);
+            const propinaDolares = parseFloat(s.propina_en_dolares || 0).toFixed(2);
+            let propinaTexto = '';
+            if (parseFloat(s.propina || 0) > 0) {
+                propinaTexto += `Propina (Bs): ${propinaBs} Bs`;
+            }
+            if (parseFloat(s.propina_en_dolares || 0) > 0) {
+                if (propinaTexto) propinaTexto += ' - ';
+                propinaTexto += `Propina ($): $${propinaDolares}`;
+            }
+            return `<p><strong>${s.nombre_servicio}</strong> - ${precioTexto}${propinaTexto ? ' - ' + propinaTexto : ''}</p>`;
         }).join('');
     }
 
@@ -471,39 +760,145 @@
 
     // Calcular totales
     async function calcularTotales(servicios, consumos, fechaFormato) {
-        // Calcular comisiones y propinas en Bs
+        // Obtener tasa del día para cálculos de conversión si es necesario
+        const tasaHoy = await window.electronAPI.dbGet(
+            'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+            [fechaFormato]
+        );
+        
+        // Calcular comisiones y propinas separadas por moneda según cómo se pagó la transacción
         let comisionesBs = 0;
+        let comisionesDolares = 0;
         let propinasBs = 0;
-        let propinasDolares = 0; // Sumar directamente desde los servicios
+        let propinasDolares = 0;
         
         servicios.forEach(servicio => {
-            comisionesBs += parseFloat(servicio.precio_cobrado || 0);
-            propinasBs += parseFloat(servicio.propina || 0);
-            // Sumar propinas en dólares directamente desde los servicios (si existe el campo)
-            propinasDolares += parseFloat(servicio.propina_en_dolares || 0);
+            const esPropinaIndependiente = !servicio.id_servicio || servicio.id_servicio === 0;
+            
+            // Obtener información de cómo se pagó la transacción
+            const transaccionPagadoBs = parseFloat(servicio.transaccion_pagado_bs || 0);
+            const transaccionPagadoDolares = parseFloat(servicio.transaccion_pagado_dolares || 0);
+            const transaccionTotalBs = parseFloat(servicio.transaccion_total_bs || 0);
+            const transaccionTotalDolares = parseFloat(servicio.transaccion_total_dolares || 0);
+            const transaccionEstado = servicio.transaccion_estado || 'cerrada';
+            
+            // Determinar cómo se pagó la transacción
+            // Si la transacción está abierta y es propina independiente, usar los totales como referencia
+            let sePagoSoloEnBs = false;
+            let sePagoSoloEnDolares = false;
+            let sePagoMixto = false;
+            
+            if (transaccionEstado === 'cerrada') {
+                // Transacción cerrada: usar pagado_bs y pagado_dolares
+                sePagoSoloEnBs = transaccionPagadoBs > 0 && transaccionPagadoDolares === 0;
+                sePagoSoloEnDolares = transaccionPagadoDolares > 0 && transaccionPagadoBs === 0;
+                sePagoMixto = transaccionPagadoBs > 0 && transaccionPagadoDolares > 0;
+            } else if (esPropinaIndependiente) {
+                // Propina independiente en transacción abierta: usar totales como referencia
+                sePagoSoloEnBs = transaccionTotalBs > 0 && transaccionTotalDolares === 0;
+                sePagoSoloEnDolares = transaccionTotalDolares > 0 && transaccionTotalBs === 0;
+                sePagoMixto = transaccionTotalBs > 0 && transaccionTotalDolares > 0;
+            }
+            
+            if (!esPropinaIndependiente) {
+                // Es un servicio real, calcular comisiones según cómo se pagó
+                const precioServicioBs = parseFloat(servicio.precio_cobrado || 0);
+                const servicioReferenciaDolares = parseFloat(servicio.servicio_referencia_dolares || 0);
+                
+                if (sePagoSoloEnBs) {
+                    // Si se pagó solo en bolívares, la comisión va solo a bolívares
+                    comisionesBs += precioServicioBs;
+                } else if (sePagoSoloEnDolares) {
+                    // Si se pagó solo en dólares, la comisión va solo a dólares
+                    // Usar el precio de referencia del servicio en dólares si está disponible
+                    if (servicioReferenciaDolares > 0) {
+                        comisionesDolares += servicioReferenciaDolares;
+                    } else if (tasaHoy && tasaHoy.tasa_bs_por_dolar) {
+                        // Si no tenemos precio de referencia, convertir desde bolívares
+                        comisionesDolares += precioServicioBs / tasaHoy.tasa_bs_por_dolar;
+                    }
+                } else if (sePagoMixto) {
+                    // Si se pagó mixto, calcular proporcionalmente basándose en lo que realmente se pagó
+                    const tasa = tasaHoy?.tasa_bs_por_dolar || 1;
+                    
+                    // Usar los valores pagados si la transacción está cerrada, sino usar los totales
+                    let pagadoBsParaProporcion = transaccionPagadoBs;
+                    let pagadoDolaresParaProporcion = transaccionPagadoDolares;
+                    
+                    if (transaccionEstado !== 'cerrada') {
+                        // Si la transacción está abierta, usar los totales como referencia
+                        pagadoBsParaProporcion = transaccionTotalBs;
+                        pagadoDolaresParaProporcion = transaccionTotalDolares;
+                    }
+                    
+                    const totalEquivalenteBs = pagadoBsParaProporcion + (pagadoDolaresParaProporcion * tasa);
+                    
+                    if (totalEquivalenteBs > 0) {
+                        const proporcionBs = pagadoBsParaProporcion / totalEquivalenteBs;
+                        const proporcionDolares = (pagadoDolaresParaProporcion * tasa) / totalEquivalenteBs;
+                        
+                        // Comisión en bolívares (proporción de Bs)
+                        comisionesBs += precioServicioBs * proporcionBs;
+                        
+                        // Comisión en dólares (proporción de dólares)
+                        if (servicioReferenciaDolares > 0) {
+                            comisionesDolares += servicioReferenciaDolares * proporcionDolares;
+                        } else if (tasaHoy && tasaHoy.tasa_bs_por_dolar) {
+                            comisionesDolares += (precioServicioBs / tasaHoy.tasa_bs_por_dolar) * proporcionDolares;
+                        }
+                    } else {
+                        // Si no hay total, asignar todo a bolívares por defecto
+                        comisionesBs += precioServicioBs;
+                    }
+                } else {
+                    // Si no hay información de pago, asignar a bolívares por defecto
+                    comisionesBs += precioServicioBs;
+                }
+            }
+            
+            // Manejar propinas
+            const propinaBsValor = parseFloat(servicio.propina || 0);
+            const propinaDolaresValor = parseFloat(servicio.propina_en_dolares || 0);
+            
+            if (esPropinaIndependiente) {
+                // Para propinas independientes, asignar según su moneda original
+                // Las propinas en dólares van solo a dólares, las propinas en bolívares van solo a bolívares
+                if (propinaDolaresValor > 0) {
+                    propinasDolares += propinaDolaresValor;
+                }
+                if (propinaBsValor > 0) {
+                    propinasBs += propinaBsValor;
+                }
+            } else {
+                // Para propinas de servicios, usar la lógica basada en cómo se pagó la transacción
+                if (sePagoSoloEnBs) {
+                    // Si se pagó solo en bolívares, las propinas van solo a bolívares
+                    propinasBs += propinaBsValor;
+                } else if (sePagoSoloEnDolares) {
+                    // Si se pagó solo en dólares, las propinas van solo a dólares
+                    propinasDolares += propinaDolaresValor;
+                } else if (sePagoMixto) {
+                    // Si se pagó mixto, las propinas van según su moneda original
+                    propinasBs += propinaBsValor;
+                    propinasDolares += propinaDolaresValor;
+                } else {
+                    // Si no hay información de pago, asignar propinas según su moneda original
+                    propinasBs += propinaBsValor;
+                    propinasDolares += propinaDolaresValor;
+                }
+            }
         });
 
-        // Calcular descuentos por consumos
+        // Calcular descuentos por consumos (siempre en bolívares)
         let descuentosBs = 0;
         consumos.forEach(consumo => {
             descuentosBs += parseFloat(consumo.precio_total || 0);
         });
 
-        // Obtener tasa del día para calcular comisiones en dólares
-        const tasaHoy = await window.electronAPI.dbGet(
-            'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
-            [fechaFormato]
-        );
-
-        let comisionesDolares = 0;
-
-        if (tasaHoy && tasaHoy.tasa_bs_por_dolar) {
-            comisionesDolares = comisionesBs / tasaHoy.tasa_bs_por_dolar;
-            // Las propinas en dólares ya están sumadas directamente, no se calculan
-        }
-
-        // Calcular subtotal (antes de aplicar porcentaje)
-        const subtotal = comisionesBs + propinasBs - descuentosBs;
+        // Calcular subtotal (propinas NO se descuentan, solo se restan los descuentos de consumos)
+        // Las propinas se suman al total final, NO se descuentan
+        const subtotal = comisionesBs - descuentosBs;
+        // Las propinas se suman después de aplicar el porcentaje
 
         // Llenar campos
         document.getElementById('nomina-comisiones-dolares').value = comisionesDolares.toFixed(2);
@@ -513,30 +908,70 @@
         document.getElementById('nomina-descuentos').value = descuentosBs.toFixed(2);
         document.getElementById('nomina-subtotal').value = subtotal.toFixed(2);
         
-        // Aplicar porcentaje al total
+        // Aplicar porcentaje fijo de 60% al total
         recalcularTotalConPorcentaje();
     }
 
-    // Recalcular total aplicando el porcentaje
+    // Recalcular total aplicando el porcentaje fijo de 60%
     function recalcularTotalConPorcentaje() {
         const subtotalInput = document.getElementById('nomina-subtotal');
-        const porcentajeInput = document.getElementById('nomina-porcentaje');
+        const propinasBsInput = document.getElementById('nomina-propinas-bs');
+        const propinasDolaresInput = document.getElementById('nomina-propinas-dolares');
         const totalInput = document.getElementById('nomina-total');
+        const totalDolaresInput = document.getElementById('nomina-total-dolares');
         
-        if (!subtotalInput || !porcentajeInput || !totalInput) return;
+        if (!subtotalInput || !totalInput) return;
         
         const subtotal = parseFloat(subtotalInput.value.replace(/[^\d.]/g, '')) || 0;
-        const porcentaje = parseInt(porcentajeInput.value) || 100;
+        const propinasBs = parseFloat(propinasBsInput ? propinasBsInput.value.replace(/[^\d.]/g, '') : 0) || 0;
+        const propinasDolares = parseFloat(propinasDolaresInput ? propinasDolaresInput.value.replace(/[^\d.]/g, '') : 0) || 0;
         
-        // Validar que el porcentaje esté entre 1 y 100
-        const porcentajeValido = Math.max(1, Math.min(100, porcentaje));
-        if (porcentajeValido !== porcentaje) {
-            porcentajeInput.value = porcentajeValido;
+        // Porcentaje fijo de 60%
+        const porcentaje = 60;
+        
+        // Calcular total en bolívares: (subtotal * 0.60) + propinas en Bs (las propinas NO se descuentan)
+        // El total en Bs es independiente y solo incluye propinas en Bs
+        const totalPagadoBs = (subtotal * (porcentaje / 100)) + propinasBs;
+        totalInput.value = totalPagadoBs.toFixed(2);
+        
+        // Calcular total en dólares (independiente de bolívares)
+        // El total en dólares solo incluye comisiones en dólares + propinas en dólares
+        // No depende de la tasa del día ni de los bolívares
+        const comisionesDolares = parseFloat(document.getElementById('nomina-comisiones-dolares').value) || 0;
+        const totalPagadoDolares = (comisionesDolares * (porcentaje / 100)) + propinasDolares;
+        if (totalDolaresInput) {
+            totalDolaresInput.value = totalPagadoDolares.toFixed(2);
         }
+    }
+
+    // Actualizar visibilidad de campos según moneda de pago seleccionada
+    function actualizarVisibilidadCamposMoneda() {
+        const monedaPagoSelect = document.getElementById('nomina-moneda-pago');
+        if (!monedaPagoSelect) return;
         
-        // Calcular total aplicando porcentaje: subtotal * (porcentaje / 100)
-        const totalPagado = subtotal * (porcentajeValido / 100);
-        totalInput.value = totalPagado.toFixed(2);
+        const monedaPago = monedaPagoSelect.value || 'bs';
+        
+        // Obtener todos los campos relacionados con dólares y bolívares
+        const camposDolares = document.querySelectorAll('.campo-dolares');
+        const camposBolivares = document.querySelectorAll('.campo-bolivares');
+        
+        if (monedaPago === 'dolares') {
+            // Si se paga en dólares, ocultar campos de bolívares y mostrar campos de dólares
+            camposBolivares.forEach(campo => {
+                campo.style.display = 'none';
+            });
+            camposDolares.forEach(campo => {
+                campo.style.display = 'flex';
+            });
+        } else {
+            // Si se paga en bolívares, ocultar campos de dólares y mostrar campos de bolívares
+            camposDolares.forEach(campo => {
+                campo.style.display = 'none';
+            });
+            camposBolivares.forEach(campo => {
+                campo.style.display = 'flex';
+            });
+        }
     }
 
     // Limpiar campos de nómina
@@ -552,40 +987,36 @@
         const porcentajeInput = document.getElementById('nomina-porcentaje');
         const porcentajeValor = document.getElementById('nomina-porcentaje-valor');
         if (porcentajeInput) {
-            porcentajeInput.value = '100';
+            porcentajeInput.value = '60';
         }
         if (porcentajeValor) {
-            porcentajeValor.textContent = '100';
+            porcentajeValor.textContent = '60';
         }
         document.getElementById('nomina-total').value = '';
+        const totalDolaresInput = document.getElementById('nomina-total-dolares');
+        if (totalDolaresInput) {
+            totalDolaresInput.value = '';
+        }
+        const monedaPagoSelect = document.getElementById('nomina-moneda-pago');
+        if (monedaPagoSelect) {
+            monedaPagoSelect.value = 'bs';
+            // Actualizar visibilidad de campos
+            actualizarVisibilidadCamposMoneda();
+        }
+        const estadoPagoSelect = document.getElementById('nomina-estado-pago');
+        if (estadoPagoSelect) {
+            estadoPagoSelect.value = 'pendiente';
+        }
     }
 
-    // Mostrar advertencia de nómina existente
+    // Mostrar advertencia de nómina existente (ya no se usa, pero mantenemos por compatibilidad)
     function mostrarAdvertencia() {
-        const advertencia = document.getElementById('nomina-advertencia');
-        const btnGuardar = document.getElementById('guardar-nomina');
-        if (advertencia) {
-            advertencia.style.display = 'block';
-        }
-        if (btnGuardar) {
-            btnGuardar.disabled = true;
-            btnGuardar.style.opacity = '0.5';
-            btnGuardar.style.cursor = 'not-allowed';
-        }
+        // Ya no mostramos advertencia, permitimos múltiples nóminas
     }
 
     // Ocultar advertencia de nómina existente
     function ocultarAdvertencia() {
-        const advertencia = document.getElementById('nomina-advertencia');
-        const btnGuardar = document.getElementById('guardar-nomina');
-        if (advertencia) {
-            advertencia.style.display = 'none';
-        }
-        if (btnGuardar) {
-            btnGuardar.disabled = false;
-            btnGuardar.style.opacity = '1';
-            btnGuardar.style.cursor = 'pointer';
-        }
+        // Ya no hay advertencia que ocultar
     }
 
     // Abrir modal para nueva nómina
@@ -594,6 +1025,12 @@
         document.getElementById('modal-title').textContent = 'Nueva Nómina';
         document.getElementById('nomina-form').reset();
         document.getElementById('nomina-id').value = '';
+        
+        // Ocultar botón pagar (solo visible al editar)
+        const btnPagar = document.getElementById('pagar-nomina');
+        if (btnPagar) {
+            btnPagar.style.display = 'none';
+        }
         
         // Establecer fecha por defecto a hoy (zona horaria local)
         const fechaInput = document.getElementById('nomina-fecha');
@@ -636,40 +1073,64 @@
         const propinasDolares = parseFloat(document.getElementById('nomina-propinas-dolares').value) || 0;
         const propinasBs = parseFloat(document.getElementById('nomina-propinas-bs').value) || 0;
         const descuentosBs = parseFloat(document.getElementById('nomina-descuentos').value) || 0;
-        const porcentaje = parseInt(document.getElementById('nomina-porcentaje').value) || 100;
-        const totalPagado = parseFloat(document.getElementById('nomina-total').value) || 0;
+        const porcentaje = 60; // Siempre 60% fijo
+        const totalPagadoBs = parseFloat(document.getElementById('nomina-total').value) || 0;
+        const totalPagadoDolares = parseFloat(document.getElementById('nomina-total-dolares').value) || 0;
+        const monedaPago = document.getElementById('nomina-moneda-pago').value || 'bs';
+        const estadoPago = document.getElementById('nomina-estado-pago').value || 'pendiente';
 
-        if (totalPagado < 0) {
+        if (totalPagadoBs < 0) {
             mostrarError('El total a pagar no puede ser negativo');
             return;
         }
 
-        // Verificar si ya existe una nómina para este empleado en esta fecha
-        const existeNomina = await validarNominaExistente(idEmpleado, fechaFormato);
-
-        if (existeNomina) {
-            mostrarError('Ya existe una nómina para este empleado en esta fecha');
-            mostrarAdvertencia();
-            return;
-        }
-
         try {
-            // Crear nómina
+            // Crear o actualizar nómina
+            if (nominaEditando) {
+                // Actualizar nómina existente
+                await window.electronAPI.dbRun(
+                    `UPDATE Nominas 
+                    SET id_empleado = ?, comisiones_referencia_en_dolares = ?, comisiones_bs = ?, propina_en_dolares = ?, propina_bs = ?, descuentos_consumos_bs = ?, total_pagado_bs = ?, total_pagado_dolares = ?, fecha_pago = ?, porcentaje_pagado = ?, moneda_pago = ?, estado_pago = ?
+                    WHERE id = ?`,
+                    [idEmpleado, comisionesDolares, comisionesBs, propinasDolares, propinasBs, descuentosBs, totalPagadoBs, totalPagadoDolares, fechaFormato, porcentaje, monedaPago, estadoPago, nominaEditando.id]
+                );
+                
+                const idNomina = nominaEditando.id;
+                
+                // Marcar consumos como pagados si la nómina está pagada
+                if (estadoPago === 'pagado') {
+                    for (const consumo of consumosPendientes) {
+                        await window.electronAPI.dbRun(
+                            'UPDATE ConsumosEmpleados SET estado = ?, id_nomina = ? WHERE id = ?',
+                            ['pagado', idNomina, consumo.id]
+                        );
+                    }
+                }
+                
+                cerrarModal();
+                await cargarDatos();
+                mostrarExito('Nómina actualizada correctamente');
+                return;
+            }
+            
+            // Crear nueva nómina
             const resultado = await window.electronAPI.dbRun(
                 `INSERT INTO Nominas 
-                (id_empleado, comisiones_referencia_en_dolares, comisiones_bs, propina_en_dolares, propina_bs, descuentos_consumos_bs, total_pagado_bs, fecha_pago, porcentaje_pagado) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [idEmpleado, comisionesDolares, comisionesBs, propinasDolares, propinasBs, descuentosBs, totalPagado, fechaFormato, porcentaje]
+                (id_empleado, comisiones_referencia_en_dolares, comisiones_bs, propina_en_dolares, propina_bs, descuentos_consumos_bs, total_pagado_bs, total_pagado_dolares, fecha_pago, porcentaje_pagado, moneda_pago, estado_pago) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [idEmpleado, comisionesDolares, comisionesBs, propinasDolares, propinasBs, descuentosBs, totalPagadoBs, totalPagadoDolares, fechaFormato, porcentaje, monedaPago, estadoPago]
             );
             
             const idNomina = resultado.lastInsertRowid;
             
-            // Marcar consumos como pagados
-            for (const consumo of consumosPendientes) {
-                await window.electronAPI.dbRun(
-                    'UPDATE ConsumosEmpleados SET estado = ?, id_nomina = ? WHERE id = ?',
-                    ['pagado', idNomina, consumo.id]
-                );
+            // Marcar consumos como pagados solo si la nómina está pagada
+            if (estadoPago === 'pagado') {
+                for (const consumo of consumosPendientes) {
+                    await window.electronAPI.dbRun(
+                        'UPDATE ConsumosEmpleados SET estado = ?, id_nomina = ? WHERE id = ?',
+                        ['pagado', idNomina, consumo.id]
+                    );
+                }
             }
 
             cerrarModal();
@@ -680,6 +1141,115 @@
             mostrarError('Error al guardar la nómina: ' + (error.message || 'Error desconocido'));
         }
     }
+
+    // Editar nómina
+    window.editarNomina = async function(id) {
+        try {
+            const nomina = await window.electronAPI.dbGet(`
+                SELECT 
+                    n.*,
+                    e.nombre || ' ' || e.apellido as nombre_empleado
+                FROM Nominas n
+                JOIN Empleados e ON n.id_empleado = e.id
+                WHERE n.id = ?
+            `, [id]);
+            
+            if (!nomina) {
+                mostrarError('Nómina no encontrada');
+                return;
+            }
+
+            nominaEditando = nomina;
+            document.getElementById('modal-title').textContent = 'Editar Nómina';
+            document.getElementById('nomina-id').value = nomina.id;
+            document.getElementById('nomina-empleado').value = nomina.id_empleado;
+            
+            // Formatear fecha
+            let fechaPago = nomina.fecha_pago;
+            if (fechaPago.includes('/')) {
+                const [day, month, year] = fechaPago.split('/');
+                fechaPago = `${year}-${month}-${day}`;
+            }
+            document.getElementById('nomina-fecha').value = fechaPago;
+            
+            // Llenar campos calculados
+            document.getElementById('nomina-comisiones-dolares').value = parseFloat(nomina.comisiones_referencia_en_dolares || 0).toFixed(2);
+            document.getElementById('nomina-comisiones-bs').value = parseFloat(nomina.comisiones_bs || 0).toFixed(2);
+            document.getElementById('nomina-propinas-dolares').value = parseFloat(nomina.propina_en_dolares || 0).toFixed(2);
+            document.getElementById('nomina-propinas-bs').value = parseFloat(nomina.propina_bs || 0).toFixed(2);
+            document.getElementById('nomina-descuentos').value = parseFloat(nomina.descuentos_consumos_bs || 0).toFixed(2);
+            
+            // Calcular subtotal
+            const subtotal = parseFloat(nomina.comisiones_bs || 0) - parseFloat(nomina.descuentos_consumos_bs || 0);
+            document.getElementById('nomina-subtotal').value = subtotal.toFixed(2);
+            
+            document.getElementById('nomina-total').value = parseFloat(nomina.total_pagado_bs || 0).toFixed(2);
+            const totalDolaresInput = document.getElementById('nomina-total-dolares');
+            if (totalDolaresInput) {
+                totalDolaresInput.value = parseFloat(nomina.total_pagado_dolares || 0).toFixed(2);
+            }
+            
+            const monedaPagoSelect = document.getElementById('nomina-moneda-pago');
+            if (monedaPagoSelect) {
+                monedaPagoSelect.value = nomina.moneda_pago || 'bs';
+                // Actualizar visibilidad de campos según la moneda guardada
+                actualizarVisibilidadCamposMoneda();
+            }
+            
+            const estadoPagoSelect = document.getElementById('nomina-estado-pago');
+            if (estadoPagoSelect) {
+                estadoPagoSelect.value = nomina.estado_pago || 'pendiente';
+            }
+            
+            // Mostrar botón pagar si está pendiente
+            const btnPagar = document.getElementById('pagar-nomina');
+            if (btnPagar) {
+                if (nomina.estado_pago === 'pendiente') {
+                    btnPagar.style.display = 'inline-block';
+                } else {
+                    btnPagar.style.display = 'none';
+                }
+            }
+            
+            // Cargar servicios y consumos asociados
+            await calcularNomina();
+            
+            document.getElementById('nomina-modal').classList.add('active');
+        } catch (error) {
+            console.error('Error al cargar nómina:', error);
+            mostrarError('Error al cargar la nómina');
+        }
+    };
+
+    // Marcar nómina como pagada
+    async function marcarNominaComoPagada() {
+        if (!nominaEditando) {
+            mostrarError('No hay nómina seleccionada');
+            return;
+        }
+
+        try {
+            await window.electronAPI.dbRun(
+                'UPDATE Nominas SET estado_pago = ? WHERE id = ?',
+                ['pagado', nominaEditando.id]
+            );
+            
+            // Marcar consumos asociados como pagados
+            for (const consumo of consumosPendientes) {
+                await window.electronAPI.dbRun(
+                    'UPDATE ConsumosEmpleados SET estado = ?, id_nomina = ? WHERE id = ?',
+                    ['pagado', nominaEditando.id, consumo.id]
+                );
+            }
+            
+            cerrarModal();
+            await cargarDatos();
+            mostrarExito('Nómina marcada como pagada correctamente');
+        } catch (error) {
+            console.error('Error al marcar nómina como pagada:', error);
+            mostrarError('Error al marcar la nómina como pagada');
+        }
+    };
 
     // Ver detalles de nómina
     window.verNomina = async function(id) {

@@ -15,6 +15,11 @@
     var reportes = window.reportesModule.reportes;
     var reporteAEliminar = window.reportesModule.reporteAEliminar;
     var initialized = window.reportesModule.initialized;
+    
+    // Variables de paginación
+    let currentPageReportes = 1;
+    const itemsPerPage = 15;
+    let reportesFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
     window.initReportes = function() {
@@ -167,12 +172,22 @@
         
         if (!tbody) return;
         
+        // Guardar lista filtrada para paginación
+        reportesFiltrados = listaReportes;
+        
         if (listaReportes.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay reportes generados</td></tr>';
+            window.renderPagination('pagination-reportes', 1, 1, 'window.cambiarPaginaReportes');
             return;
         }
+        
+        // Calcular paginación
+        const totalPages = Math.ceil(listaReportes.length / itemsPerPage);
+        const startIndex = (currentPageReportes - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const reportesPagina = listaReportes.slice(startIndex, endIndex);
 
-        tbody.innerHTML = listaReportes.map((reporte, index) => {
+        tbody.innerHTML = reportesPagina.map((reporte, index) => {
             // Formatear fechas
             let fechaReporte = reporte.fecha_reporte;
             if (fechaReporte.includes('/')) {
@@ -190,9 +205,11 @@
                 fechaCreacion = `${day}/${month}/${year} ${hours}:${minutes}`;
             }
             
+            const globalIndex = startIndex + index + 1;
+            
             return `
                 <tr>
-                    <td>#${index + 1}</td>
+                    <td>#${globalIndex}</td>
                     <td>${fechaReporte}</td>
                     <td>${fechaCreacion}</td>
                     <td>${reporte.tasa_cambio ? parseFloat(reporte.tasa_cambio).toFixed(2) + ' Bs/$' : 'N/A'}</td>
@@ -209,34 +226,47 @@
                 </tr>
             `;
         }).join('');
+        
+        // Renderizar paginación
+        window.renderPagination('pagination-reportes', currentPageReportes, totalPages, 'window.cambiarPaginaReportes');
     }
     
-    // Exponer función para uso externo
+    // Función para cambiar página de reportes
+    function cambiarPaginaReportes(page) {
+        currentPageReportes = page;
+        mostrarReportes(reportesFiltrados);
+    }
+    
+    // Exponer funciones para uso externo
     window.mostrarReportes = mostrarReportes;
+    window.cambiarPaginaReportes = cambiarPaginaReportes;
 
     // Filtrar reportes
     function filtrarReportes() {
         const searchTerm = document.getElementById('search-reporte').value.toLowerCase();
         const filterFecha = document.getElementById('filter-fecha').value;
 
-        let reportesFiltrados = reportes;
+        let reportesFiltradosTemp = reportes;
 
         // Filtrar por fecha
         if (filterFecha) {
             const [year, month, day] = filterFecha.split('-');
             const fechaFormato = `${day}/${month}/${year}`;
-            reportesFiltrados = reportesFiltrados.filter(r => r.fecha_reporte === fechaFormato);
+            reportesFiltradosTemp = reportesFiltradosTemp.filter(r => r.fecha_reporte === fechaFormato);
         }
 
         // Filtrar por búsqueda
         if (searchTerm) {
-            reportesFiltrados = reportesFiltrados.filter(reporte => {
+            reportesFiltradosTemp = reportesFiltradosTemp.filter(reporte => {
                 const fecha = (reporte.fecha_reporte || '').toLowerCase();
                 return fecha.includes(searchTerm);
             });
         }
 
-        mostrarReportes(reportesFiltrados);
+        // Resetear página al filtrar
+        currentPageReportes = 1;
+        
+        mostrarReportes(reportesFiltradosTemp);
     }
 
     // Abrir modal para generar reporte
@@ -306,7 +336,7 @@
                 [fechaFormato]
             );
 
-            // Obtener nóminas pagadas ese día
+            // Obtener nóminas pagadas ese día (solo las marcadas como pagadas)
             const nominas = await window.electronAPI.dbQuery(`
                 SELECT 
                     n.*,
@@ -314,6 +344,7 @@
                 FROM Nominas n
                 JOIN Empleados e ON n.id_empleado = e.id
                 WHERE n.fecha_pago = ?
+                AND n.estado_pago = 'pagado'
             `, [fechaFormato]);
 
             // Obtener transacciones cerradas ese día
@@ -336,14 +367,23 @@
 
             // Obtener servicios realizados ese día
             // La fecha puede estar en formato DD/MM/YYYY HH:MM:SS o ISO
+            // Incluir información de la transacción para saber la moneda de pago
+            // Incluir propinas independientes (id_servicio NULL o 0) incluso si la transacción está abierta
             const servicios = await window.electronAPI.dbQuery(`
                 SELECT 
                     sr.*,
-                    s.nombre as nombre_servicio,
-                    e.nombre || ' ' || e.apellido as nombre_empleado
+                    COALESCE(s.nombre, 'Propina Independiente') as nombre_servicio,
+                    COALESCE(s.referencia_en_dolares, 0) as servicio_referencia_dolares,
+                    e.nombre || ' ' || e.apellido as nombre_empleado,
+                    COALESCE(t.pagado_bs, 0) as pagado_bs,
+                    COALESCE(t.pagado_dolares, 0) as pagado_dolares,
+                    COALESCE(t.total_en_bs, 0) as transaccion_total_bs,
+                    COALESCE(t.total_en_dolares, 0) as transaccion_total_dolares,
+                    t.estado as transaccion_estado
                 FROM ServiciosRealizados sr
-                JOIN Servicios s ON sr.id_servicio = s.id
+                LEFT JOIN Servicios s ON sr.id_servicio = s.id
                 JOIN Empleados e ON sr.id_empleado = e.id
+                JOIN Transacciones t ON sr.id_transaccion = t.id
                 WHERE sr.estado = 'completado'
                 AND (
                     -- Si la fecha está en formato DD/MM/YYYY HH:MM:SS
@@ -352,7 +392,14 @@
                     -- Si la fecha está en formato ISO (YYYY-MM-DD)
                     strftime('%Y-%m-%d', sr.fecha) = ?
                 )
-                ORDER BY sr.id DESC
+                AND (
+                    -- Incluir servicios de transacciones cerradas
+                    (t.estado = 'cerrada')
+                    OR
+                    -- Incluir propinas independientes incluso si la transacción está abierta
+                    (sr.id_servicio IS NULL OR sr.id_servicio = 0)
+                )
+                ORDER BY e.nombre, e.apellido, sr.id DESC
             `, [fechaFormato, fechaInput]);
 
             // Obtener productos vendidos ese día
@@ -374,12 +421,141 @@
             `, [fechaFormato, fechaInput]);
 
             // Calcular totales
-            const totalNominas = nominas.reduce((sum, n) => sum + parseFloat(n.total_pagado_bs || 0), 0);
+            // Separar nóminas por moneda de pago
+            const totalNominasBs = nominas
+                .filter(n => n.moneda_pago === 'bs' || n.moneda_pago === 'mixto')
+                .reduce((sum, n) => sum + parseFloat(n.total_pagado_bs || 0), 0);
+            const totalNominasDolares = nominas
+                .filter(n => n.moneda_pago === 'dolares' || n.moneda_pago === 'mixto')
+                .reduce((sum, n) => sum + parseFloat(n.total_pagado_dolares || 0), 0);
+            const totalNominas = totalNominasBs; // Mantener para compatibilidad
+            
             const totalServicios = servicios.length;
             const totalProductos = productos.reduce((sum, p) => sum + parseInt(p.cantidad || 0), 0);
             const totalTransacciones = transacciones.length;
-            const totalIngresosBs = transacciones.reduce((sum, t) => sum + parseFloat(t.total_en_bs || 0), 0);
-            const totalIngresosDolares = transacciones.reduce((sum, t) => sum + parseFloat(t.total_en_dolares || 0), 0);
+            
+            // Calcular ingresos SIN propinas
+            // Necesitamos calcular servicios y productos por separado según cómo se pagaron
+            let totalIngresosBs = 0;
+            let totalIngresosDolares = 0;
+            
+            // Calcular total de propinas del día (tanto de servicios como independientes)
+            let totalPropinasBs = 0;
+            let totalPropinasDolares = 0;
+            
+            servicios.forEach(s => {
+                // Sumar propinas de servicios regulares e independientes
+                totalPropinasBs += parseFloat(s.propina || 0);
+                totalPropinasDolares += parseFloat(s.propina_en_dolares || 0);
+            });
+            
+            // Calcular ingresos de servicios según cómo se pagaron
+            servicios.forEach(s => {
+                const esPropinaIndependiente = !s.id_servicio || s.id_servicio === 0;
+                
+                if (!esPropinaIndependiente) {
+                    // Es un servicio real
+                    const precioServicioBs = parseFloat(s.precio_cobrado || 0);
+                    const precioServicioDolares = parseFloat(s.servicio_referencia_dolares || 0);
+                    const pagadoBs = parseFloat(s.pagado_bs || 0);
+                    const pagadoDolares = parseFloat(s.pagado_dolares || 0);
+                    const transaccionEstado = s.transaccion_estado || 'cerrada';
+                    
+                    // Determinar cómo se pagó el servicio
+                    let sePagoSoloEnBs = false;
+                    let sePagoSoloEnDolares = false;
+                    let sePagoMixto = false;
+                    
+                    if (transaccionEstado === 'cerrada') {
+                        sePagoSoloEnBs = pagadoBs > 0 && pagadoDolares === 0;
+                        sePagoSoloEnDolares = pagadoDolares > 0 && pagadoBs === 0;
+                        sePagoMixto = pagadoBs > 0 && pagadoDolares > 0;
+                    } else {
+                        // Si la transacción está abierta, usar totales como referencia
+                        const totalBs = parseFloat(s.transaccion_total_bs || 0);
+                        const totalDolares = parseFloat(s.transaccion_total_dolares || 0);
+                        sePagoSoloEnBs = totalBs > 0 && totalDolares === 0;
+                        sePagoSoloEnDolares = totalDolares > 0 && totalBs === 0;
+                        sePagoMixto = totalBs > 0 && totalDolares > 0;
+                    }
+                    
+                    if (sePagoSoloEnBs) {
+                        // Servicio pagado solo en bolívares
+                        totalIngresosBs += precioServicioBs;
+                    } else if (sePagoSoloEnDolares) {
+                        // Servicio pagado solo en dólares
+                        if (precioServicioDolares > 0) {
+                            totalIngresosDolares += precioServicioDolares;
+                        }
+                    } else if (sePagoMixto) {
+                        // Servicio pagado mixto - calcular proporcionalmente
+                        const totalTransaccionBs = parseFloat(s.transaccion_total_bs || 0);
+                        const totalTransaccionDolares = parseFloat(s.transaccion_total_dolares || 0);
+                        const pagadoBsTransaccion = parseFloat(s.pagado_bs || 0);
+                        const pagadoDolaresTransaccion = parseFloat(s.pagado_dolares || 0);
+                        
+                        // Usar valores pagados si la transacción está cerrada
+                        let pagadoBsParaProporcion = transaccionEstado === 'cerrada' ? pagadoBsTransaccion : totalTransaccionBs;
+                        let pagadoDolaresParaProporcion = transaccionEstado === 'cerrada' ? pagadoDolaresTransaccion : totalTransaccionDolares;
+                        
+                        if (pagadoBsParaProporcion > 0 || pagadoDolaresParaProporcion > 0) {
+                            // Obtener tasa del día para calcular proporción
+                            const tasaValor = tasa ? parseFloat(tasa.tasa_bs_por_dolar) : 1;
+                            const totalEquivalenteBs = pagadoBsParaProporcion + (pagadoDolaresParaProporcion * tasaValor);
+                            
+                            if (totalEquivalenteBs > 0) {
+                                const proporcionBs = pagadoBsParaProporcion / totalEquivalenteBs;
+                                const proporcionDolares = (pagadoDolaresParaProporcion * tasaValor) / totalEquivalenteBs;
+                                
+                                totalIngresosBs += precioServicioBs * proporcionBs;
+                                if (precioServicioDolares > 0) {
+                                    totalIngresosDolares += precioServicioDolares * proporcionDolares;
+                                }
+                            } else {
+                                // Si no hay total, asignar todo a bolívares por defecto
+                                totalIngresosBs += precioServicioBs;
+                            }
+                        } else {
+                            // Si no hay información de pago, asignar a bolívares por defecto
+                            totalIngresosBs += precioServicioBs;
+                        }
+                    } else {
+                        // Si no hay información de cómo se pagó, asignar a bolívares por defecto
+                        totalIngresosBs += precioServicioBs;
+                    }
+                }
+            });
+            
+            // Sumar productos vendidos (siempre en bolívares)
+            productos.forEach(p => {
+                totalIngresosBs += parseFloat(p.precio_total || 0);
+            });
+            
+            // Calcular balance/neto (Ingresos - Nóminas)
+            const balanceBs = totalIngresosBs - totalNominasBs;
+            const balanceDolares = totalIngresosDolares - totalNominasDolares;
+            
+            // Contar movimientos por método de pago y entidad
+            const movimientosPorMetodo = {};
+            const movimientosPorEntidad = {};
+            
+            transacciones.forEach(t => {
+                if (t.metodos_pago) {
+                    const metodos = t.metodos_pago.split(',');
+                    metodos.forEach(m => {
+                        m = m.trim();
+                        movimientosPorMetodo[m] = (movimientosPorMetodo[m] || 0) + 1;
+                    });
+                }
+                
+                if (t.entidades_pago) {
+                    const entidades = t.entidades_pago.split(',');
+                    entidades.forEach(e => {
+                        e = e.trim();
+                        movimientosPorEntidad[e] = (movimientosPorEntidad[e] || 0) + 1;
+                    });
+                }
+            });
 
             // Crear resumen JSON
             const resumen = JSON.stringify({
@@ -390,23 +566,42 @@
                 nominas: nominas.map(n => ({
                     empleado: n.nombre_empleado,
                     comisiones_bs: n.comisiones_bs,
+                    comisiones_dolares: n.comisiones_referencia_en_dolares || 0,
                     propinas_dolares: n.propina_en_dolares,
                     propinas_bs: n.propina_bs,
                     descuentos_bs: n.descuentos_consumos_bs,
-                    total_pagado_bs: n.total_pagado_bs
+                    total_pagado_bs: n.total_pagado_bs,
+                    total_pagado_dolares: n.total_pagado_dolares || 0,
+                    moneda_pago: n.moneda_pago || 'bs'
                 })),
+                totales: {
+                    ingresos_bs: totalIngresosBs,
+                    ingresos_dolares: totalIngresosDolares,
+                    nominas_bs: totalNominasBs,
+                    nominas_dolares: totalNominasDolares,
+                    balance_bs: balanceBs,
+                    balance_dolares: balanceDolares
+                },
                 transacciones: transacciones.map(t => ({
                     cliente: t.nombre_cliente,
                     total_bs: t.total_en_bs,
                     total_dolares: t.total_en_dolares,
                     metodos_pago: t.metodos_pago,
-                    entidades_pago: t.entidades_pago
+                    entidades_pago: t.entidades_pago,
+                    numero_referencia: t.numero_referencia,
+                    pagado_bs: t.pagado_bs || 0,
+                    pagado_dolares: t.pagado_dolares || 0
                 })),
+                movimientosPorMetodo: movimientosPorMetodo,
+                movimientosPorEntidad: movimientosPorEntidad,
                 servicios: servicios.map(s => ({
                     nombre: s.nombre_servicio,
                     empleado: s.nombre_empleado,
                     precio: s.precio_cobrado,
-                    propina: s.propina
+                    propina: s.propina,
+                    propina_dolares: s.propina_en_dolares || 0,
+                    pagado_bs: s.pagado_bs || 0,
+                    pagado_dolares: s.pagado_dolares || 0
                 })),
                 productos: productos.map(p => ({
                     nombre: p.nombre_producto,
@@ -462,37 +657,182 @@
                         <h4 style="margin-top: 0; color: var(--text-primary);">Resumen General</h4>
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
                             <p><strong>Tasa del Día:</strong> ${reporte.tasa_cambio ? parseFloat(reporte.tasa_cambio).toFixed(2) + ' Bs/$' : 'No establecida'}</p>
-                            <p><strong>Total Nóminas Pagadas:</strong> ${parseFloat(reporte.total_nominas_pagadas || 0).toFixed(2)} Bs</p>
                             <p><strong>Total Servicios:</strong> ${parseInt(reporte.total_servicios || 0)}</p>
                             <p><strong>Total Productos Vendidos:</strong> ${parseInt(reporte.total_productos_vendidos || 0)}</p>
                             <p><strong>Total Transacciones:</strong> ${parseInt(reporte.total_transacciones || 0)}</p>
-                            <p><strong>Total Ingresos:</strong> ${parseFloat(reporte.total_ingresos_bs || 0).toFixed(2)} Bs ($${parseFloat(reporte.total_ingresos_dolares || 0).toFixed(2)})</p>
                         </div>
                     </div>
 
-                    ${resumen.nominas && resumen.nominas.length > 0 ? `
+                    ${resumen.totales ? `
                     <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
-                        <h4 style="margin-top: 0; color: var(--text-primary);">Nóminas Pagadas (${resumen.nominas.length})</h4>
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Subtotales</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                            <div style="border: 1px solid var(--border-color); padding: 10px; border-radius: 6px;">
+                                <h5 style="margin-top: 0; margin-bottom: 10px; color: var(--text-primary);">Ingresos</h5>
+                                <p style="margin: 5px 0;"><strong>Total Ingresos (Bs):</strong> ${parseFloat(resumen.totales.ingresos_bs || 0).toFixed(2)} Bs</p>
+                                <p style="margin: 5px 0;"><strong>Total Ingresos ($):</strong> $${parseFloat(resumen.totales.ingresos_dolares || 0).toFixed(2)}</p>
+                            </div>
+                            <div style="border: 1px solid var(--border-color); padding: 10px; border-radius: 6px;">
+                                <h5 style="margin-top: 0; margin-bottom: 10px; color: var(--text-primary);">Nóminas Pagadas</h5>
+                                <p style="margin: 5px 0;"><strong>Total Nóminas (Bs):</strong> ${parseFloat(resumen.totales.nominas_bs || 0).toFixed(2)} Bs</p>
+                                <p style="margin: 5px 0;"><strong>Total Nóminas ($):</strong> $${parseFloat(resumen.totales.nominas_dolares || 0).toFixed(2)}</p>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; padding: 15px; background: var(--bg-primary); border: 2px solid var(--border-color); border-radius: 6px;">
+                            <h5 style="margin-top: 0; margin-bottom: 10px; color: var(--text-primary);">Balance Neto (Ingresos - Nóminas)</h5>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                                <p style="margin: 5px 0; font-size: 18px;"><strong>Balance (Bs):</strong> <span style="color: ${parseFloat(resumen.totales.balance_bs || 0) >= 0 ? '#4caf50' : '#f44336'}">${parseFloat(resumen.totales.balance_bs || 0).toFixed(2)} Bs</span></p>
+                                <p style="margin: 5px 0; font-size: 18px;"><strong>Balance ($):</strong> <span style="color: ${parseFloat(resumen.totales.balance_dolares || 0) >= 0 ? '#4caf50' : '#f44336'}">$${parseFloat(resumen.totales.balance_dolares || 0).toFixed(2)}</span></p>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    ${resumen.nominas && resumen.nominas.length > 0 ? (() => {
+                        // Separar nóminas por moneda de pago
+                        const nominasBs = resumen.nominas.filter(n => n.moneda_pago === 'bs');
+                        const nominasDolares = resumen.nominas.filter(n => n.moneda_pago === 'dolares');
+                        const nominasMixto = resumen.nominas.filter(n => n.moneda_pago === 'mixto');
+                        
+                        let html = '';
+                        
+                        // Nóminas pagadas en Bolívares
+                        if (nominasBs.length > 0) {
+                            html += `
+                            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                                <h4 style="margin-top: 0; color: var(--text-primary);">Nóminas Pagadas en Bolívares (${nominasBs.length})</h4>
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid var(--border-color);">
+                                            <th style="text-align: left; padding: 8px;">Empleado</th>
+                                            <th style="text-align: right; padding: 8px;">Comisiones (Bs)</th>
+                                            <th style="text-align: right; padding: 8px;">Propinas (Bs)</th>
+                                            <th style="text-align: right; padding: 8px;">Descuentos</th>
+                                            <th style="text-align: right; padding: 8px;">Total (Bs)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${nominasBs.map(n => `
+                                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                                <td style="padding: 8px;">${n.empleado}</td>
+                                                <td style="text-align: right; padding: 8px;">${parseFloat(n.comisiones_bs || 0).toFixed(2)} Bs</td>
+                                                <td style="text-align: right; padding: 8px;">${parseFloat(n.propinas_bs || 0).toFixed(2)} Bs</td>
+                                                <td style="text-align: right; padding: 8px;">${parseFloat(n.descuentos_bs || 0).toFixed(2)} Bs</td>
+                                                <td style="text-align: right; padding: 8px;"><strong>${parseFloat(n.total_pagado_bs || 0).toFixed(2)} Bs</strong></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            `;
+                        }
+                        
+                        // Nóminas pagadas en Dólares
+                        if (nominasDolares.length > 0) {
+                            html += `
+                            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                                <h4 style="margin-top: 0; color: var(--text-primary);">Nóminas Pagadas en Dólares (${nominasDolares.length})</h4>
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid var(--border-color);">
+                                            <th style="text-align: left; padding: 8px;">Empleado</th>
+                                            <th style="text-align: right; padding: 8px;">Comisiones Ref. ($)</th>
+                                            <th style="text-align: right; padding: 8px;">Propinas Ref. ($)</th>
+                                            <th style="text-align: right; padding: 8px;">Total ($)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${nominasDolares.map(n => `
+                                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                                <td style="padding: 8px;">${n.empleado}</td>
+                                                <td style="text-align: right; padding: 8px;">$${parseFloat(n.comisiones_dolares || 0).toFixed(2)}</td>
+                                                <td style="text-align: right; padding: 8px;">$${parseFloat(n.propinas_dolares || 0).toFixed(2)}</td>
+                                                <td style="text-align: right; padding: 8px;"><strong>$${parseFloat(n.total_pagado_dolares || 0).toFixed(2)}</strong></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            `;
+                        }
+                        
+                        // Nóminas pagadas Mixto
+                        if (nominasMixto.length > 0) {
+                            html += `
+                            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                                <h4 style="margin-top: 0; color: var(--text-primary);">Nóminas Pagadas Mixto (${nominasMixto.length})</h4>
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid var(--border-color);">
+                                            <th style="text-align: left; padding: 8px;">Empleado</th>
+                                            <th style="text-align: right; padding: 8px;">Comisiones (Bs)</th>
+                                            <th style="text-align: right; padding: 8px;">Comisiones Ref. ($)</th>
+                                            <th style="text-align: right; padding: 8px;">Propinas (Bs)</th>
+                                            <th style="text-align: right; padding: 8px;">Propinas Ref. ($)</th>
+                                            <th style="text-align: right; padding: 8px;">Descuentos</th>
+                                            <th style="text-align: right; padding: 8px;">Total (Bs)</th>
+                                            <th style="text-align: right; padding: 8px;">Total ($)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${nominasMixto.map(n => `
+                                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                                <td style="padding: 8px;">${n.empleado}</td>
+                                                <td style="text-align: right; padding: 8px;">${parseFloat(n.comisiones_bs || 0).toFixed(2)} Bs</td>
+                                                <td style="text-align: right; padding: 8px;">$${parseFloat(n.comisiones_dolares || 0).toFixed(2)}</td>
+                                                <td style="text-align: right; padding: 8px;">${parseFloat(n.propinas_bs || 0).toFixed(2)} Bs</td>
+                                                <td style="text-align: right; padding: 8px;">$${parseFloat(n.propinas_dolares || 0).toFixed(2)}</td>
+                                                <td style="text-align: right; padding: 8px;">${parseFloat(n.descuentos_bs || 0).toFixed(2)} Bs</td>
+                                                <td style="text-align: right; padding: 8px;"><strong>${parseFloat(n.total_pagado_bs || 0).toFixed(2)} Bs</strong></td>
+                                                <td style="text-align: right; padding: 8px;"><strong>$${parseFloat(n.total_pagado_dolares || 0).toFixed(2)}</strong></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            `;
+                        }
+                        
+                        return html;
+                    })() : ''}
+
+                    ${resumen.movimientosPorMetodo && Object.keys(resumen.movimientosPorMetodo).length > 0 ? `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Movimientos por Método de Pago</h4>
                         <table style="width: 100%; border-collapse: collapse;">
                             <thead>
                                 <tr style="border-bottom: 1px solid var(--border-color);">
-                                    <th style="text-align: left; padding: 8px;">Empleado</th>
-                                    <th style="text-align: right; padding: 8px;">Comisiones</th>
-                                    <th style="text-align: right; padding: 8px;">Propinas Ref. ($)</th>
-                                    <th style="text-align: right; padding: 8px;">Propinas (Bs)</th>
-                                    <th style="text-align: right; padding: 8px;">Descuentos</th>
-                                    <th style="text-align: right; padding: 8px;">Total</th>
+                                    <th style="text-align: left; padding: 8px;">Método de Pago</th>
+                                    <th style="text-align: right; padding: 8px;">Cantidad</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                ${resumen.nominas.map(n => `
+                                ${Object.entries(resumen.movimientosPorMetodo).map(([metodo, cantidad]) => `
                                     <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td style="padding: 8px;">${n.empleado}</td>
-                                        <td style="text-align: right; padding: 8px;">${parseFloat(n.comisiones_bs).toFixed(2)} Bs</td>
-                                        <td style="text-align: right; padding: 8px;">$${parseFloat(n.propinas_dolares || 0).toFixed(2)}</td>
-                                        <td style="text-align: right; padding: 8px;">${parseFloat(n.propinas_bs).toFixed(2)} Bs</td>
-                                        <td style="text-align: right; padding: 8px;">${parseFloat(n.descuentos_bs).toFixed(2)} Bs</td>
-                                        <td style="text-align: right; padding: 8px;"><strong>${parseFloat(n.total_pagado_bs).toFixed(2)} Bs</strong></td>
+                                        <td style="padding: 8px;">${metodo}</td>
+                                        <td style="text-align: right; padding: 8px;"><strong>${cantidad}</strong></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ` : ''}
+
+                    ${resumen.movimientosPorEntidad && Object.keys(resumen.movimientosPorEntidad).length > 0 ? `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Movimientos por Entidad</h4>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <th style="text-align: left; padding: 8px;">Entidad</th>
+                                    <th style="text-align: right; padding: 8px;">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.entries(resumen.movimientosPorEntidad).map(([entidad, cantidad]) => `
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 8px;">${entidad}</td>
+                                        <td style="text-align: right; padding: 8px;"><strong>${cantidad}</strong></td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -507,20 +847,45 @@
                             <thead>
                                 <tr style="border-bottom: 1px solid var(--border-color);">
                                     <th style="text-align: left; padding: 8px;">Cliente</th>
-                                    <th style="text-align: right; padding: 8px;">Total (Bs)</th>
-                                    <th style="text-align: right; padding: 8px;">Total ($)</th>
-                                    <th style="text-align: left; padding: 8px;">Métodos</th>
+                                    <th style="text-align: right; padding: 8px;">Pagado (Bs)</th>
+                                    <th style="text-align: right; padding: 8px;">Pagado ($)</th>
+                                    <th style="text-align: left; padding: 8px;">Método de Pago</th>
+                                    <th style="text-align: left; padding: 8px;">Entidad</th>
+                                    <th style="text-align: left; padding: 8px;">Referencia</th>
+                                    <th style="text-align: left; padding: 8px;">Moneda Pago</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                ${resumen.transacciones.map(t => `
+                                ${resumen.transacciones.map(t => {
+                                    const pagadoBs = parseFloat(t.pagado_bs || 0);
+                                    const pagadoDolares = parseFloat(t.pagado_dolares || 0);
+                                    let monedaPago = 'No especificado';
+                                    if (pagadoBs > 0 && pagadoDolares > 0) {
+                                        monedaPago = 'Mixto (Bs y $)';
+                                    } else if (pagadoBs > 0) {
+                                        monedaPago = 'Bolívares (Bs)';
+                                    } else if (pagadoDolares > 0) {
+                                        monedaPago = 'Dólares ($)';
+                                    }
+                                    
+                                    // Formatear métodos de pago para mostrar
+                                    let metodosPagoTexto = 'N/A';
+                                    if (t.metodos_pago) {
+                                        metodosPagoTexto = t.metodos_pago.split(',').map(m => m.trim()).join(', ');
+                                    }
+                                    
+                                    return `
                                     <tr style="border-bottom: 1px solid var(--border-color);">
                                         <td style="padding: 8px;">${t.cliente}</td>
-                                        <td style="text-align: right; padding: 8px;">${parseFloat(t.total_bs).toFixed(2)} Bs</td>
-                                        <td style="text-align: right; padding: 8px;">$${parseFloat(t.total_dolares).toFixed(2)}</td>
-                                        <td style="padding: 8px;">${t.metodos_pago || 'N/A'}</td>
+                                        <td style="text-align: right; padding: 8px;">${pagadoBs.toFixed(2)} Bs</td>
+                                        <td style="text-align: right; padding: 8px;">$${pagadoDolares.toFixed(2)}</td>
+                                        <td style="padding: 8px;">${metodosPagoTexto}</td>
+                                        <td style="padding: 8px;">${t.entidades_pago || 'N/A'}</td>
+                                        <td style="padding: 8px;">${t.numero_referencia || 'N/A'}</td>
+                                        <td style="padding: 8px;">${monedaPago}</td>
                                     </tr>
-                                `).join('')}
+                                `;
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -528,27 +893,71 @@
 
                     ${resumen.servicios && resumen.servicios.length > 0 ? `
                     <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
-                        <h4 style="margin-top: 0; color: var(--text-primary);">Servicios Realizados (${resumen.servicios.length})</h4>
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <thead>
-                                <tr style="border-bottom: 1px solid var(--border-color);">
-                                    <th style="text-align: left; padding: 8px;">Servicio</th>
-                                    <th style="text-align: left; padding: 8px;">Empleado</th>
-                                    <th style="text-align: right; padding: 8px;">Precio</th>
-                                    <th style="text-align: right; padding: 8px;">Propina</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${resumen.servicios.map(s => `
-                                    <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td style="padding: 8px;">${s.nombre}</td>
-                                        <td style="padding: 8px;">${s.empleado}</td>
-                                        <td style="text-align: right; padding: 8px;">${parseFloat(s.precio).toFixed(2)} Bs</td>
-                                        <td style="text-align: right; padding: 8px;">${parseFloat(s.propina).toFixed(2)} Bs</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Servicios Realizados por Empleado</h4>
+                        ${(() => {
+                            // Agrupar servicios por empleado
+                            const serviciosPorEmpleado = {};
+                            resumen.servicios.forEach(s => {
+                                if (!serviciosPorEmpleado[s.empleado]) {
+                                    serviciosPorEmpleado[s.empleado] = {
+                                        empleado: s.empleado,
+                                        servicios: [],
+                                        totalServicios: 0,
+                                        pagadoBs: s.pagado_bs || 0,
+                                        pagadoDolares: s.pagado_dolares || 0
+                                    };
+                                }
+                                serviciosPorEmpleado[s.empleado].servicios.push(s);
+                                serviciosPorEmpleado[s.empleado].totalServicios++;
+                            });
+                            
+                            // Determinar moneda de pago para cada empleado
+                            Object.values(serviciosPorEmpleado).forEach(emp => {
+                                const pagadoBs = emp.pagadoBs;
+                                const pagadoDolares = emp.pagadoDolares;
+                                if (pagadoBs > 0 && pagadoDolares > 0) {
+                                    emp.monedaPago = 'Mixto (Bs y $)';
+                                } else if (pagadoBs > 0) {
+                                    emp.monedaPago = 'Bolívares (Bs)';
+                                } else if (pagadoDolares > 0) {
+                                    emp.monedaPago = 'Dólares ($)';
+                                } else {
+                                    emp.monedaPago = 'No especificado';
+                                }
+                            });
+                            
+                            return Object.values(serviciosPorEmpleado).map(emp => `
+                                <div style="margin-bottom: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 15px;">
+                                    <h5 style="margin-top: 0; margin-bottom: 10px; color: var(--text-primary);">
+                                        ${emp.empleado} - ${emp.totalServicios} servicio(s) - Moneda: ${emp.monedaPago}
+                                    </h5>
+                                    <table style="width: 100%; border-collapse: collapse; margin-left: 20px;">
+                                        <thead>
+                                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                                <th style="text-align: left; padding: 8px;">Servicio</th>
+                                                <th style="text-align: right; padding: 8px;">Precio</th>
+                                                <th style="text-align: right; padding: 8px;">Propina (Bs)</th>
+                                                <th style="text-align: right; padding: 8px;">Propina ($)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${emp.servicios.map(s => {
+                                                const esPropinaIndependiente = s.nombre === 'Propina Independiente';
+                                                const precioTexto = esPropinaIndependiente ? 'N/A' : `${parseFloat(s.precio || 0).toFixed(2)} Bs`;
+                                                return `
+                                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                                    <td style="padding: 8px;">${s.nombre}</td>
+                                                    <td style="text-align: right; padding: 8px;">${precioTexto}</td>
+                                                    <td style="text-align: right; padding: 8px;">${parseFloat(s.propina || 0).toFixed(2)} Bs</td>
+                                                    <td style="text-align: right; padding: 8px;">$${parseFloat(s.propina_dolares || 0).toFixed(2)}</td>
+                                                </tr>
+                                            `;
+                                            }).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `).join('');
+                        })()}
                     </div>
                     ` : ''}
 

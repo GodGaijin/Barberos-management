@@ -90,6 +90,34 @@
             if (filterFecha) {
                 filterFecha.onchange = filtrarCitas;
             }
+            
+            // Búsqueda de clientes
+            const clienteSearch = document.getElementById('cita-cliente-search');
+            if (clienteSearch) {
+                clienteSearch.oninput = filtrarClientesSelect;
+                clienteSearch.onkeypress = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        buscarClienteEnDB();
+                    }
+                };
+                clienteSearch.onblur = () => {
+                    setTimeout(() => ocultarDropdown('citas-clientes-results-dropdown'), 200);
+                };
+            }
+            
+            const btnBuscarClienteDB = document.getElementById('btn-buscar-cliente-citas-db');
+            if (btnBuscarClienteDB) {
+                btnBuscarClienteDB.onclick = buscarClienteEnDB;
+            }
+            
+            // Cerrar dropdowns al hacer clic fuera
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#cita-cliente-search') && 
+                    !e.target.closest('#citas-clientes-results-dropdown')) {
+                    ocultarDropdown('citas-clientes-results-dropdown');
+                }
+            });
 
             // Confirmar eliminación
             const confirmDelete = document.getElementById('confirm-delete');
@@ -120,6 +148,181 @@
         }
     }
 
+    // Actualizar select de clientes
+    function actualizarSelectClientes(clientesFiltrados = null) {
+        const clienteSelect = document.getElementById('cita-cliente');
+        if (!clienteSelect) return;
+        
+        const clientesAMostrar = clientesFiltrados || clientes;
+        clienteSelect.innerHTML = '<option value="">Sin cliente (reserva general)</option>' +
+            clientesAMostrar.map(c => {
+                let cedulaCompleta;
+                if (c.tipo_cedula === 'NA' || c.cedula === 0) {
+                    cedulaCompleta = 'NA';
+                } else {
+                    cedulaCompleta = `${c.tipo_cedula}-${c.cedula}`;
+                }
+                return `<option value="${c.id}">${c.nombre} ${c.apellido} (${cedulaCompleta})</option>`;
+            }).join('');
+    }
+    
+    // Mostrar dropdown de resultados
+    function mostrarDropdownResultados(dropdownId, resultados, tipo) {
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) return;
+        
+        if (!resultados || resultados.length === 0) {
+            dropdown.style.display = 'none';
+            return;
+        }
+        
+        let html = '';
+        resultados.forEach((item, index) => {
+            let texto = '';
+            if (tipo === 'cliente') {
+                let cedulaCompleta = '';
+                if (item.tipo_cedula === 'NA' || item.cedula === 0) {
+                    cedulaCompleta = 'NA';
+                } else {
+                    cedulaCompleta = `${item.tipo_cedula}-${item.cedula}`;
+                }
+                texto = `${item.nombre} ${item.apellido} (${cedulaCompleta})`;
+            }
+            
+            html += `<div class="result-item" data-id="${item.id}" data-index="${index}">${texto}</div>`;
+        });
+        
+        dropdown.innerHTML = html;
+        dropdown.style.display = 'block';
+        
+        // Añadir event listeners a los items
+        dropdown.querySelectorAll('.result-item').forEach(item => {
+            item.onclick = () => {
+                const id = parseInt(item.getAttribute('data-id'));
+                if (tipo === 'cliente') {
+                    seleccionarCliente(id);
+                }
+            };
+        });
+    }
+    
+    // Ocultar dropdown
+    function ocultarDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+    }
+    
+    // Seleccionar cliente
+    function seleccionarCliente(clienteId) {
+        const clienteSelect = document.getElementById('cita-cliente');
+        if (clienteSelect) {
+            clienteSelect.value = clienteId;
+        }
+        const clienteSearch = document.getElementById('cita-cliente-search');
+        if (clienteSearch) {
+            const cliente = clientes.find(c => c.id === clienteId);
+            if (cliente) {
+                clienteSearch.value = `${cliente.nombre} ${cliente.apellido}`;
+            }
+        }
+        ocultarDropdown('citas-clientes-results-dropdown');
+    }
+    
+    // Filtrar clientes en el select (búsqueda local)
+    function filtrarClientesSelect() {
+        const searchTerm = document.getElementById('cita-cliente-search').value.toLowerCase();
+        const clienteSelect = document.getElementById('cita-cliente');
+        
+        if (!searchTerm) {
+            actualizarSelectClientes();
+            ocultarDropdown('citas-clientes-results-dropdown');
+            return;
+        }
+        
+        const clientesFiltrados = clientes.filter(c => {
+            const nombreCompleto = `${c.nombre} ${c.apellido}`.toLowerCase();
+            let cedulaCompleta = '';
+            if (c.tipo_cedula === 'NA' || c.cedula === 0) {
+                cedulaCompleta = 'na';
+            } else {
+                cedulaCompleta = `${c.tipo_cedula}-${c.cedula}`;
+            }
+            return nombreCompleto.includes(searchTerm) || cedulaCompleta.includes(searchTerm);
+        });
+        
+        actualizarSelectClientes(clientesFiltrados);
+        mostrarDropdownResultados('citas-clientes-results-dropdown', clientesFiltrados, 'cliente');
+        
+        // Si solo hay un resultado, seleccionarlo automáticamente
+        if (clientesFiltrados.length === 1) {
+            seleccionarCliente(clientesFiltrados[0].id);
+        }
+    }
+    
+    // Buscar cliente en la base de datos
+    async function buscarClienteEnDB() {
+        const searchTerm = document.getElementById('cita-cliente-search').value.trim();
+        
+        if (!searchTerm) {
+            await cargarClientes();
+            ocultarDropdown('citas-clientes-results-dropdown');
+            return;
+        }
+        
+        try {
+            const resultados = await window.electronAPI.dbQuery(`
+                SELECT * FROM Clientes 
+                WHERE 
+                    LOWER(nombre || ' ' || apellido) LIKE ? OR
+                    LOWER(apellido || ' ' || nombre) LIKE ? OR
+                    CAST(cedula AS TEXT) LIKE ? OR
+                    LOWER(tipo_cedula || '-' || CAST(cedula AS TEXT)) LIKE ?
+                ORDER BY nombre, apellido ASC
+                LIMIT 50
+            `, [
+                `%${searchTerm.toLowerCase()}%`,
+                `%${searchTerm.toLowerCase()}%`,
+                `%${searchTerm}%`,
+                `%${searchTerm.toLowerCase()}%`
+            ]);
+            
+            if (resultados && resultados.length > 0) {
+                window.citasModule.clientes = resultados;
+                clientes.length = 0;
+                clientes.push(...resultados);
+                
+                actualizarSelectClientes(resultados);
+                mostrarDropdownResultados('citas-clientes-results-dropdown', resultados, 'cliente');
+                
+                // Si solo hay un resultado, seleccionarlo automáticamente
+                if (resultados.length === 1) {
+                    seleccionarCliente(resultados[0].id);
+                }
+                
+                if (typeof window.mostrarNotificacion === 'function') {
+                    if (resultados.length === 1) {
+                        window.mostrarNotificacion(`Cliente encontrado y seleccionado`, 'success', 2000);
+                    } else {
+                        window.mostrarNotificacion(`Se encontraron ${resultados.length} cliente(s)`, 'success', 2000);
+                    }
+                }
+            } else {
+                actualizarSelectClientes([]);
+                ocultarDropdown('citas-clientes-results-dropdown');
+                if (typeof window.mostrarNotificacion === 'function') {
+                    window.mostrarNotificacion('No se encontraron clientes con ese criterio de búsqueda', 'warning', 3000);
+                }
+            }
+        } catch (error) {
+            console.error('Error al buscar clientes:', error);
+            if (typeof window.mostrarNotificacion === 'function') {
+                window.mostrarNotificacion('Error al buscar clientes: ' + (error.message || error), 'error', 5000);
+            }
+        }
+    }
+    
     // Cargar clientes
     async function cargarClientes() {
         try {
@@ -130,20 +333,7 @@
                 clientes.push(...window.citasModule.clientes);
             }
             
-            // Llenar select de clientes
-            const clienteSelect = document.getElementById('cita-cliente');
-            if (clienteSelect) {
-                clienteSelect.innerHTML = '<option value="">Sin cliente (reserva general)</option>' +
-                    clientes.map(c => {
-                        let cedulaCompleta;
-                        if (c.tipo_cedula === 'NA' || c.cedula === 0) {
-                            cedulaCompleta = 'NA';
-                        } else {
-                            cedulaCompleta = `${c.tipo_cedula}-${c.cedula}`;
-                        }
-                        return `<option value="${c.id}">${c.nombre} ${c.apellido} (${cedulaCompleta})</option>`;
-                    }).join('');
-            }
+            actualizarSelectClientes();
         } catch (error) {
             console.error('Error al cargar clientes:', error);
         }

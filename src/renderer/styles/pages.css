@@ -90,6 +90,41 @@ input[type="range"]::-moz-range-track {
     transition: all 0.3s ease;
 }
 
+.search-results-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    margin-top: 4px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.search-results-dropdown .result-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s;
+}
+
+.search-results-dropdown .result-item:last-child {
+    border-bottom: none;
+}
+
+.search-results-dropdown .result-item:hover {
+    background: var(--bg-secondary);
+}
+
+.search-results-dropdown .result-item.selected {
+    background: var(--primary-color);
+    color: white;
+}
+
 .search-input:focus {
     outline: none;
     border-color: var(--accent-primary);

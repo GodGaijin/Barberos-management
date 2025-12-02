@@ -21,6 +21,11 @@
     var empleados = window.consumosModule.empleados;
     var productos = window.consumosModule.productos;
     var initialized = window.consumosModule.initialized;
+    
+    // Variables de paginación
+    let currentPageConsumos = 1;
+    const itemsPerPage = 15;
+    let consumosFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
     window.initConsumosEmpleados = function() {
@@ -249,12 +254,22 @@
         
         if (!tbody) return;
         
+        // Guardar lista filtrada para paginación
+        consumosFiltrados = listaConsumos;
+        
         if (listaConsumos.length === 0) {
             tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No hay consumos registrados</td></tr>';
+            window.renderPagination('pagination-consumos', 1, 1, 'window.cambiarPaginaConsumos');
             return;
         }
+        
+        // Calcular paginación
+        const totalPages = Math.ceil(listaConsumos.length / itemsPerPage);
+        const startIndex = (currentPageConsumos - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const consumosPagina = listaConsumos.slice(startIndex, endIndex);
 
-        tbody.innerHTML = listaConsumos.map((consumo, index) => {
+        tbody.innerHTML = consumosPagina.map((consumo, index) => {
             const estadoClass = consumo.estado === 'pagado' ? 'estado-pagado' : 'estado-pendiente';
             const estadoText = consumo.estado === 'pagado' ? 'Pagado' : 'Pendiente';
             
@@ -266,9 +281,11 @@
                 fechaFormateada = `${day}/${month}/${year}`;
             }
             
+            const globalIndex = startIndex + index + 1;
+            
             return `
                 <tr class="${estadoClass}">
-                    <td>#${index + 1}</td>
+                    <td>#${globalIndex}</td>
                     <td>${consumo.nombre_empleado}</td>
                     <td>${consumo.nombre_producto}</td>
                     <td>${consumo.cantidad}</td>
@@ -291,10 +308,20 @@
                 </tr>
             `;
         }).join('');
+        
+        // Renderizar paginación
+        window.renderPagination('pagination-consumos', currentPageConsumos, totalPages, 'window.cambiarPaginaConsumos');
     }
     
-    // Exponer función para uso externo
+    // Función para cambiar página de consumos
+    function cambiarPaginaConsumos(page) {
+        currentPageConsumos = page;
+        mostrarConsumos(consumosFiltrados);
+    }
+    
+    // Exponer funciones para uso externo
     window.mostrarConsumos = mostrarConsumos;
+    window.cambiarPaginaConsumos = cambiarPaginaConsumos;
 
     // Filtrar consumos
     function filtrarConsumos() {
@@ -302,28 +329,31 @@
         const filterEstado = document.getElementById('filter-estado').value;
         const filterEmpleado = document.getElementById('filter-empleado').value;
 
-        let consumosFiltrados = consumos;
+        let consumosFiltradosTemp = consumos;
 
         // Filtrar por estado
         if (filterEstado !== 'all') {
-            consumosFiltrados = consumosFiltrados.filter(c => c.estado === filterEstado);
+            consumosFiltradosTemp = consumosFiltradosTemp.filter(c => c.estado === filterEstado);
         }
 
         // Filtrar por empleado
         if (filterEmpleado !== 'all') {
-            consumosFiltrados = consumosFiltrados.filter(c => c.id_empleado == filterEmpleado);
+            consumosFiltradosTemp = consumosFiltradosTemp.filter(c => c.id_empleado == filterEmpleado);
         }
 
         // Filtrar por búsqueda
         if (searchTerm) {
-            consumosFiltrados = consumosFiltrados.filter(consumo => {
+            consumosFiltradosTemp = consumosFiltradosTemp.filter(consumo => {
                 const empleado = (consumo.nombre_empleado || '').toLowerCase();
                 const producto = (consumo.nombre_producto || '').toLowerCase();
                 return empleado.includes(searchTerm) || producto.includes(searchTerm);
             });
         }
 
-        mostrarConsumos(consumosFiltrados);
+        // Resetear página al filtrar
+        currentPageConsumos = 1;
+        
+        mostrarConsumos(consumosFiltradosTemp);
     }
 
     // Contador para IDs únicos de filas de productos
@@ -618,11 +648,26 @@
             // Llenar campos
             empleadoSelect.value = consumo.id_empleado;
             
-            // Formatear fecha
+            // Formatear fecha - puede venir en formato DD/MM/YYYY o YYYY-MM-DD
             let fechaValue = consumo.fecha;
             if (fechaValue.includes('/')) {
-                const [day, month, year] = fechaValue.split('/');
-                fechaValue = `${year}-${month}-${day}`;
+                // Formato DD/MM/YYYY
+                const partes = fechaValue.split('/');
+                if (partes.length === 3) {
+                    const [day, month, year] = partes;
+                    fechaValue = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                }
+            } else if (fechaValue.includes('-')) {
+                // Ya está en formato YYYY-MM-DD o similar
+                const partes = fechaValue.split('-');
+                if (partes.length === 3 && partes[0].length === 4) {
+                    // Formato YYYY-MM-DD, está bien
+                    fechaValue = fechaValue.split(' ')[0]; // Solo la fecha, sin hora si existe
+                } else if (partes.length === 3 && partes[2].length === 4) {
+                    // Formato DD-MM-YYYY, convertir a YYYY-MM-DD
+                    const [day, month, year] = partes;
+                    fechaValue = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                }
             }
             fechaInput.value = fechaValue;
             

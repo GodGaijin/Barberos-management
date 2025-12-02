@@ -17,6 +17,11 @@
     var empleadoEditando = window.empleadosModule.empleadoEditando;
     var empleadoAEliminar = window.empleadosModule.empleadoAEliminar;
     var initialized = window.empleadosModule.initialized;
+    
+    // Variables de paginación
+    let currentPageEmpleados = 1;
+    const itemsPerPage = 15;
+    let empleadosFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
     window.initEmpleados = function() {
@@ -181,19 +186,30 @@
         
         if (!tbody) return;
         
+        // Guardar lista filtrada para paginación
+        empleadosFiltrados = listaEmpleados;
+        
         if (listaEmpleados.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay empleados registrados</td></tr>';
+            window.renderPagination('pagination-empleados', 1, 1, 'window.cambiarPaginaEmpleados');
             return;
         }
+        
+        // Calcular paginación
+        const totalPages = Math.ceil(listaEmpleados.length / itemsPerPage);
+        const startIndex = (currentPageEmpleados - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const empleadosPagina = listaEmpleados.slice(startIndex, endIndex);
 
-        tbody.innerHTML = listaEmpleados.map((empleado, index) => {
+        tbody.innerHTML = empleadosPagina.map((empleado, index) => {
             const cedulaCompleta = `${empleado.tipo_cedula}-${empleado.cedula}`;
             const telefono = empleado.telefono || '-';
             const fechaNacimiento = empleado.fecha_de_nacimiento || '-';
+            const globalIndex = startIndex + index + 1;
             
             return `
                 <tr>
-                    <td>#${index + 1}</td>
+                    <td>#${globalIndex}</td>
                     <td>${empleado.nombre}</td>
                     <td>${empleado.apellido}</td>
                     <td>${cedulaCompleta}</td>
@@ -210,26 +226,36 @@
                 </tr>
             `;
         }).join('');
+        
+        // Renderizar paginación
+        window.renderPagination('pagination-empleados', currentPageEmpleados, totalPages, 'window.cambiarPaginaEmpleados');
     }
     
-    // Exponer función para uso externo
+    // Función para cambiar página de empleados
+    function cambiarPaginaEmpleados(page) {
+        currentPageEmpleados = page;
+        mostrarEmpleados(empleadosFiltrados);
+    }
+    
+    // Exponer funciones para uso externo
     window.mostrarEmpleados = mostrarEmpleados;
+    window.cambiarPaginaEmpleados = cambiarPaginaEmpleados;
 
     // Filtrar empleados
     function filtrarEmpleados() {
         const searchTerm = document.getElementById('search-empleado').value.toLowerCase();
         const filterTipoCedula = document.getElementById('filter-tipo-cedula').value;
 
-        let empleadosFiltrados = empleados;
+        let empleadosFiltradosTemp = empleados;
 
         // Filtrar por tipo de cédula
         if (filterTipoCedula !== 'all') {
-            empleadosFiltrados = empleadosFiltrados.filter(e => e.tipo_cedula === filterTipoCedula);
+            empleadosFiltradosTemp = empleadosFiltradosTemp.filter(e => e.tipo_cedula === filterTipoCedula);
         }
 
         // Filtrar por búsqueda
         if (searchTerm) {
-            empleadosFiltrados = empleadosFiltrados.filter(empleado => {
+            empleadosFiltradosTemp = empleadosFiltradosTemp.filter(empleado => {
                 const nombre = empleado.nombre.toLowerCase();
                 const apellido = empleado.apellido.toLowerCase();
                 const cedula = empleado.cedula.toString();
@@ -237,7 +263,10 @@
             });
         }
 
-        mostrarEmpleados(empleadosFiltrados);
+        // Resetear página al filtrar
+        currentPageEmpleados = 1;
+        
+        mostrarEmpleados(empleadosFiltradosTemp);
     }
 
     // Abrir modal para nuevo empleado

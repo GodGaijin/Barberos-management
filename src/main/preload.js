@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeListener(channel, callback);
   },
   // Fix focus
-  fixFocus: () => ipcRenderer.send('fix-focus')
+  fixFocus: () => ipcRenderer.send('fix-focus'),
+  // Tutoriales
+  tutorialGetProgress: (tutorialId) => ipcRenderer.invoke('tutorial-get-progress', tutorialId),
+  tutorialSaveProgress: (tutorialId, etapa, completado, datosAdicionales) => ipcRenderer.invoke('tutorial-save-progress', tutorialId, etapa, completado, datosAdicionales),
+  tutorialGetAllProgress: () => ipcRenderer.invoke('tutorial-get-all-progress')
 });
 

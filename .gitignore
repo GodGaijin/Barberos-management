@@ -26,16 +26,18 @@ latest.yml
 builder-debug.yml
 builder-effective-config.yaml
 
-# Database files
+# Database files (user data - should not be in repo)
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
 
-# Migration files
-for migration/
-database/for-migration/migrate.js
+# Migration files and test databases
+database/for-migration/*.db
+database/for-migration/*.sqlite
+database/for-migration/*.sqlite3
+!database/for-migration/migrate.js
 
 # Logs
 *.log
@@ -100,12 +102,40 @@ coverage/
 
 # Debug
 .vscode-test/
+.vscode/launch.json
+.vscode/settings.json
+
+# User data directories (Electron app data)
+AppData/
+Local/
+Roaming/
 
 # Backup files
 *.bak
 *.backup
 *~
 
-# Documentation files (except README)
+# Package manager lock files (keep package-lock.json for consistency)
+# package-lock.json  # Comentado - algunos proyectos lo incluyen
+
+# Electron specific
+app-update.yml
+latest.yml
+*.blockmap
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.AppImage
+*.snap
+*.nupkg
+
+# Windows specific
+*.lnk
+*.url
+
+# Documentation files (keep important ones)
 *.md
 !README.md
+!COMPILACION.md
+!docs/*.md

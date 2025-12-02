@@ -82,3 +82,70 @@
     </div>
 </div>
 
+<!-- Modal para productos con stock bajo -->
+<div id="productos-stock-bajo-modal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3>Productos con Stock Bajo</h3>
+            <button class="modal-close" id="close-stock-bajo-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="productos-stock-bajo-lista" style="max-height: 400px; overflow-y: auto;">
+                <!-- Los productos se llenarán dinámicamente -->
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cerrar-stock-bajo">Cerrar</button>
+            <button type="button" class="btn btn-primary" id="ir-productos-stock-bajo">Ir a Productos</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para productos sin stock -->
+<div id="productos-sin-stock-modal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3>Productos sin Stock</h3>
+            <button class="modal-close" id="close-sin-stock-modal">&times;</button>
+        </div>
+        <div id="productos-sin-stock-contenido" style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+            <!-- El contenido se llenará dinámicamente -->
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cerrar-sin-stock">Cerrar</button>
+            <button type="button" class="btn btn-primary" id="ir-productos-sin-stock">Ir a Productos</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para establecer tasa del día desde dashboard -->
+<div id="tasa-dashboard-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Establecer Tasa del Día</h3>
+            <button class="modal-close" id="close-tasa-dashboard-modal">&times;</button>
+        </div>
+        <form id="tasa-dashboard-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="tasa-dashboard-fecha">Fecha *</label>
+                    <input type="date" id="tasa-dashboard-fecha" name="fecha" required>
+                </div>
+                <div class="form-group">
+                    <label for="tasa-dashboard-valor">Tasa (Bs por $) *</label>
+                    <input type="text" id="tasa-dashboard-valor" name="tasa" required placeholder="000.00" inputmode="decimal" style="text-align: right; direction: rtl;">
+                </div>
+            </div>
+
+            <div class="info-box">
+                <p><strong>Nota:</strong> La tasa se usa para calcular los precios en bolívares a partir de los precios de referencia en dólares.</p>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-tasa-dashboard">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar Tasa</button>
+            </div>
+        </form>
+    </div>
+</div>
+

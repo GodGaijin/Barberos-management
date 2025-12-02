@@ -33,6 +33,10 @@ class DB {
       this.migrateCitas();
       // Migrar TasasCambio para permitir múltiples tasas por día
       this.migrateTasasCambio();
+      // Migrar ServiciosRealizados para permitir propinas independientes
+      this.migrateServiciosRealizados();
+      // Migrar tabla de tutoriales
+      this.migrateTutoriales();
     }
     
     // Habilitar foreign keys
@@ -249,18 +253,57 @@ class DB {
           console.log('Actualizando tabla Nominas para incluir porcentaje_pagado...');
           
           try {
-            this.db.exec('ALTER TABLE Nominas ADD COLUMN porcentaje_pagado INTEGER NOT NULL DEFAULT 100;');
+            this.db.exec('ALTER TABLE Nominas ADD COLUMN porcentaje_pagado INTEGER NOT NULL DEFAULT 60;');
             console.log('Columna porcentaje_pagado agregada');
             
-            // Actualizar registros existentes para establecer porcentaje en 100%
+            // Actualizar registros existentes para establecer porcentaje en 60%
             this.db.exec(`
               UPDATE Nominas 
-              SET porcentaje_pagado = 100
+              SET porcentaje_pagado = 60
               WHERE porcentaje_pagado IS NULL;
             `);
           } catch (e) {
             if (!e.message.includes('duplicate column')) {
               console.error('Error al agregar porcentaje_pagado:', e);
+            }
+          }
+        }
+        
+        // Verificar si faltan los nuevos campos: total_pagado_dolares, moneda_pago, estado_pago
+        if (!sql.includes('total_pagado_dolares')) {
+          console.log('Actualizando tabla Nominas para incluir total_pagado_dolares, moneda_pago y estado_pago...');
+          
+          try {
+            this.db.exec('ALTER TABLE Nominas ADD COLUMN total_pagado_dolares REAL DEFAULT 0;');
+            console.log('Columna total_pagado_dolares agregada');
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar total_pagado_dolares:', e);
+            }
+          }
+          
+          try {
+            this.db.exec('ALTER TABLE Nominas ADD COLUMN moneda_pago TEXT DEFAULT "bs";');
+            console.log('Columna moneda_pago agregada');
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar moneda_pago:', e);
+            }
+          }
+          
+          try {
+            this.db.exec('ALTER TABLE Nominas ADD COLUMN estado_pago TEXT DEFAULT "pendiente";');
+            console.log('Columna estado_pago agregada');
+            
+            // Actualizar registros existentes
+            this.db.exec(`
+              UPDATE Nominas 
+              SET estado_pago = 'pendiente'
+              WHERE estado_pago IS NULL;
+            `);
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar estado_pago:', e);
             }
           }
         }
@@ -323,6 +366,29 @@ class DB {
           }
           
           console.log('Tabla Transacciones actualizada exitosamente');
+        }
+        
+        // Verificar si faltan los campos pagado_bs y pagado_dolares
+        if (!sql.includes('pagado_bs')) {
+          console.log('Actualizando tabla Transacciones para incluir pagado_bs y pagado_dolares...');
+          
+          try {
+            this.db.exec('ALTER TABLE Transacciones ADD COLUMN pagado_bs REAL DEFAULT 0;');
+            console.log('Columna pagado_bs agregada');
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar pagado_bs:', e);
+            }
+          }
+          
+          try {
+            this.db.exec('ALTER TABLE Transacciones ADD COLUMN pagado_dolares REAL DEFAULT 0;');
+            console.log('Columna pagado_dolares agregada');
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar pagado_dolares:', e);
+            }
+          }
         }
       }
     } catch (error) {
@@ -408,6 +474,84 @@ class DB {
       }
     } catch (error) {
       console.error('Error al migrar tabla Citas:', error);
+    }
+  }
+
+  migrateServiciosRealizados() {
+    try {
+      // Verificar si la tabla ServiciosRealizados tiene el campo propina_en_dolares
+      const tableInfo = this.db.prepare(`
+        SELECT sql FROM sqlite_master
+        WHERE type='table' AND name='ServiciosRealizados'
+      `).get();
+
+      if (tableInfo && tableInfo.sql) {
+        const sql = tableInfo.sql;
+        
+        // Verificar si falta el campo propina_en_dolares
+        if (!sql.includes('propina_en_dolares')) {
+          console.log('Agregando campo propina_en_dolares a ServiciosRealizados...');
+          
+          try {
+            this.db.exec('ALTER TABLE ServiciosRealizados ADD COLUMN propina_en_dolares REAL DEFAULT 0;');
+            console.log('Columna propina_en_dolares agregada a ServiciosRealizados');
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar propina_en_dolares:', e);
+            }
+          }
+        }
+        
+        // Verificar si id_servicio permite NULL (necesario para propinas independientes)
+        // Si tiene NOT NULL, necesitamos recrear la tabla sin esa restricción
+        if (sql.includes('id_servicio INTEGER NOT NULL')) {
+          console.log('Migrando tabla ServiciosRealizados para permitir NULL en id_servicio (propinas independientes)...');
+          
+          try {
+            // Crear tabla temporal sin NOT NULL en id_servicio
+            this.db.exec(`
+              CREATE TABLE ServiciosRealizados_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_transaccion INTEGER NOT NULL,
+                id_empleado INTEGER NOT NULL,
+                id_servicio INTEGER,
+                fecha TEXT NOT NULL,
+                precio_cobrado REAL NOT NULL,
+                propina REAL NOT NULL DEFAULT 0,
+                propina_en_dolares REAL DEFAULT 0,
+                estado TEXT NOT NULL CHECK(estado IN ('completado', 'cancelado', 'pendiente')) DEFAULT 'completado',
+                FOREIGN KEY (id_transaccion) REFERENCES Transacciones(id) ON DELETE CASCADE,
+                FOREIGN KEY (id_empleado) REFERENCES Empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (id_servicio) REFERENCES Servicios(id) ON DELETE CASCADE
+              );
+            `);
+            
+            // Copiar datos existentes
+            this.db.exec(`
+              INSERT INTO ServiciosRealizados_new 
+              (id, id_transaccion, id_empleado, id_servicio, fecha, precio_cobrado, propina, propina_en_dolares, estado)
+              SELECT id, id_transaccion, id_empleado, id_servicio, fecha, precio_cobrado, propina, COALESCE(propina_en_dolares, 0), estado
+              FROM ServiciosRealizados;
+            `);
+            
+            // Eliminar tabla antigua
+            this.db.exec('DROP TABLE ServiciosRealizados;');
+            
+            // Renombrar tabla nueva
+            this.db.exec('ALTER TABLE ServiciosRealizados_new RENAME TO ServiciosRealizados;');
+            
+            // Recrear índices
+            this.db.exec('CREATE INDEX IF NOT EXISTS idx_servicios_realizados_transaccion ON ServiciosRealizados(id_transaccion);');
+            this.db.exec('CREATE INDEX IF NOT EXISTS idx_servicios_realizados_empleado ON ServiciosRealizados(id_empleado);');
+            
+            console.log('Tabla ServiciosRealizados migrada exitosamente para permitir propinas independientes');
+          } catch (e) {
+            console.error('Error al migrar ServiciosRealizados:', e);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error al migrar tabla ServiciosRealizados:', error);
     }
   }
 
@@ -575,6 +719,35 @@ class DB {
     } catch (error) {
       console.error('Error en get:', error);
       throw error;
+    }
+  }
+
+  migrateTutoriales() {
+    try {
+      // Verificar si la tabla TutorialesProgreso existe
+      const tableExists = this.db.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='TutorialesProgreso'
+      `).get();
+
+      if (!tableExists) {
+        console.log('Creando tabla TutorialesProgreso...');
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS TutorialesProgreso (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tutorial_id TEXT NOT NULL UNIQUE,
+            etapa_actual INTEGER NOT NULL DEFAULT 0,
+            completado INTEGER NOT NULL DEFAULT 0,
+            fecha_completado TEXT,
+            datos_adicionales TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('Tabla TutorialesProgreso creada exitosamente');
+      }
+    } catch (error) {
+      console.error('Error al migrar tabla TutorialesProgreso:', error);
     }
   }
 

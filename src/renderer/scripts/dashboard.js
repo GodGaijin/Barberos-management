@@ -19,6 +19,44 @@
                 console.warn('Botón refresh-dashboard no encontrado');
             }
 
+            // Configurar event listeners para modales de productos sin stock
+            const cerrarSinStockBtn = document.getElementById('cerrar-sin-stock');
+            const closeSinStockBtn = document.getElementById('close-sin-stock-modal');
+            const irProductosSinStockBtn = document.getElementById('ir-productos-sin-stock');
+            const modalSinStock = document.getElementById('productos-sin-stock-modal');
+            
+            if (cerrarSinStockBtn && modalSinStock) {
+                cerrarSinStockBtn.addEventListener('click', () => {
+                    modalSinStock.classList.remove('active');
+                });
+            }
+            if (closeSinStockBtn && modalSinStock) {
+                closeSinStockBtn.addEventListener('click', () => {
+                    modalSinStock.classList.remove('active');
+                });
+            }
+            if (irProductosSinStockBtn && modalSinStock) {
+                irProductosSinStockBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    modalSinStock.classList.remove('active');
+                    if (window.navigateToPage) {
+                        window.navigateToPage('productos');
+                    } else {
+                        console.error('window.navigateToPage no está disponible');
+                    }
+                });
+            }
+            
+            // Cerrar modal al hacer clic fuera
+            if (modalSinStock) {
+                modalSinStock.addEventListener('click', (e) => {
+                    if (e.target === modalSinStock) {
+                        modalSinStock.classList.remove('active');
+                    }
+                });
+            }
+
             // Navegación desde links - usar delegación de eventos para elementos dinámicos
             const pageContent = document.getElementById('page-content');
             if (pageContent) {
@@ -97,8 +135,11 @@
 
             // Ingresos del día - buscar todas las transacciones cerradas del día actual
             // La fecha puede estar en formato DD/MM/YYYY HH:MM:SS o ISO
+            // Usar pagado_bs y pagado_dolares en lugar de total_en_bs
             const transaccionesHoy = await window.electronAPI.dbQuery(
-                `SELECT total_en_bs FROM Transacciones 
+                `SELECT COALESCE(pagado_bs, 0) as pagado_bs, 
+                        COALESCE(pagado_dolares, 0) as pagado_dolares
+                 FROM Transacciones 
                  WHERE estado = 'cerrada'
                  AND (
                      -- Si la fecha está en formato DD/MM/YYYY HH:MM:SS
@@ -109,8 +150,15 @@
                  )`,
                 [fechaHoy, fechaISO]
             );
-            const ingresosHoy = transaccionesHoy.reduce((sum, t) => sum + (parseFloat(t.total_en_bs) || 0), 0);
-            document.getElementById('ingresos-hoy').textContent = `Bs. ${ingresosHoy.toFixed(2)}`;
+            const ingresosBs = transaccionesHoy.reduce((sum, t) => sum + (parseFloat(t.pagado_bs) || 0), 0);
+            const ingresosDolares = transaccionesHoy.reduce((sum, t) => sum + (parseFloat(t.pagado_dolares) || 0), 0);
+            
+            // Mostrar ingresos en bolívares (si hay dólares, se pueden mostrar por separado si se desea)
+            let textoIngresos = `Bs. ${ingresosBs.toFixed(2)}`;
+            if (ingresosDolares > 0) {
+                textoIngresos += ` / $${ingresosDolares.toFixed(2)}`;
+            }
+            document.getElementById('ingresos-hoy').textContent = textoIngresos;
 
             // Transacciones pendientes
             const transPendientes = await window.electronAPI.dbQuery(
@@ -277,39 +325,126 @@
         try {
             const fechaHoy = obtenerFechaHoy();
 
-            // Obtener empleados con servicios o consumos hoy que no tienen nómina pagada
-            const empleadosSinNomina = await window.electronAPI.dbQuery(
-                `SELECT e.id, e.nombre || ' ' || e.apellido as nombre_empleado,
-                        COALESCE(SUM(CASE WHEN sr.fecha LIKE ? THEN sr.precio_cobrado ELSE 0 END), 0) as total_servicios,
-                        COALESCE(SUM(CASE WHEN ce.estado = 'pendiente' THEN ce.precio_total ELSE 0 END), 0) as total_consumos
-                 FROM Empleados e
-                 LEFT JOIN ServiciosRealizados sr ON sr.id_empleado = e.id
-                 LEFT JOIN ConsumosEmpleados ce ON ce.id_empleado = e.id
-                 LEFT JOIN Nominas n ON n.id_empleado = e.id AND n.fecha_pago = ?
-                 WHERE n.id IS NULL
-                 GROUP BY e.id, e.nombre, e.apellido
-                 HAVING total_servicios > 0 OR total_consumos > 0`,
-                [`${fechaHoy}%`, fechaHoy]
+            // Obtener nóminas marcadas como pendientes (estado_pago = 'pendiente')
+            const nominasPendientes = await window.electronAPI.dbQuery(
+                `SELECT n.id, n.fecha_pago, n.total_pagado_bs, n.total_pagado_dolares, n.moneda_pago,
+                        e.nombre || ' ' || e.apellido as nombre_empleado
+                 FROM Nominas n
+                 JOIN Empleados e ON n.id_empleado = e.id
+                 WHERE n.estado_pago = 'pendiente'
+                 ORDER BY n.fecha_pago DESC, n.id DESC
+                 LIMIT 10`
             );
 
-            if (empleadosSinNomina.length === 0) {
+            // Obtener empleados con servicios o consumos pendientes que no tienen nómina pagada
+            const empleadosSinNomina = await window.electronAPI.dbQuery(
+                `SELECT DISTINCT e.id, e.nombre || ' ' || e.apellido as nombre_empleado,
+                        (SELECT COUNT(*) FROM ServiciosRealizados sr 
+                         WHERE sr.id_empleado = e.id 
+                         AND sr.estado = 'completado'
+                         AND NOT EXISTS (
+                             SELECT 1 FROM Nominas n2 
+                             WHERE n2.id_empleado = sr.id_empleado 
+                             AND n2.estado_pago = 'pagado'
+                             AND n2.fecha_pago <= sr.fecha
+                         )) as servicios_pendientes,
+                        (SELECT COUNT(*) FROM ConsumosEmpleados ce 
+                         WHERE ce.id_empleado = e.id 
+                         AND ce.estado = 'pendiente') as consumos_pendientes
+                 FROM Empleados e
+                 WHERE EXISTS (
+                     SELECT 1 FROM ServiciosRealizados sr 
+                     WHERE sr.id_empleado = e.id 
+                     AND sr.estado = 'completado'
+                     AND NOT EXISTS (
+                         SELECT 1 FROM Nominas n2 
+                         WHERE n2.id_empleado = sr.id_empleado 
+                         AND n2.estado_pago = 'pagado'
+                         AND n2.fecha_pago <= sr.fecha
+                     )
+                 )
+                 OR EXISTS (
+                     SELECT 1 FROM ConsumosEmpleados ce 
+                     WHERE ce.id_empleado = e.id 
+                     AND ce.estado = 'pendiente'
+                 )`
+            );
+
+            // Combinar ambas listas
+            const items = [];
+
+            // Agregar nóminas pendientes
+            nominasPendientes.forEach(n => {
+                const totalBs = parseFloat(n.total_pagado_bs || 0);
+                const totalDolares = parseFloat(n.total_pagado_dolares || 0);
+                let totalTexto = '';
+                
+                if (n.moneda_pago === 'dolares') {
+                    totalTexto = `$${totalDolares.toFixed(2)}`;
+                } else if (n.moneda_pago === 'mixto') {
+                    totalTexto = `Bs. ${totalBs.toFixed(2)} / $${totalDolares.toFixed(2)}`;
+                } else {
+                    totalTexto = `Bs. ${totalBs.toFixed(2)}`;
+                }
+
+                items.push({
+                    tipo: 'nomina_pendiente',
+                    id: n.id,
+                    nombre: n.nombre_empleado,
+                    fecha: n.fecha_pago,
+                    total: totalTexto,
+                    moneda: n.moneda_pago
+                });
+            });
+
+            // Agregar empleados sin nómina pagada (solo si no tienen nómina pendiente ya)
+            empleadosSinNomina.forEach(emp => {
+                const tieneNominaPendiente = nominasPendientes.some(n => 
+                    n.nombre_empleado === emp.nombre_empleado
+                );
+                
+                if (!tieneNominaPendiente && (emp.servicios_pendientes > 0 || emp.consumos_pendientes > 0)) {
+                    items.push({
+                        tipo: 'sin_nomina',
+                        nombre: emp.nombre_empleado,
+                        servicios: emp.servicios_pendientes,
+                        consumos: emp.consumos_pendientes
+                    });
+                }
+            });
+
+            if (items.length === 0) {
                 container.innerHTML = '<p class="empty-state">✅ Todas las nóminas están al día</p>';
                 return;
             }
 
-            container.innerHTML = empleadosSinNomina.map(emp => {
-                return `
-                    <div class="dashboard-item warning-item" data-page="nominas" style="cursor: pointer;">
-                        <div class="item-main">
-                            <span class="item-title">⚠️ ${emp.nombre_empleado}</span>
-                            <span class="item-subtitle">Sin nómina pagada hoy</span>
+            container.innerHTML = items.map(item => {
+                if (item.tipo === 'nomina_pendiente') {
+                    return `
+                        <div class="dashboard-item warning-item" data-page="nominas" style="cursor: pointer;">
+                            <div class="item-main">
+                                <span class="item-title">⏳ ${item.nombre}</span>
+                                <span class="item-subtitle">Nómina pendiente - ${item.fecha}</span>
+                            </div>
+                            <div class="item-amount" style="color: #ff9800; font-weight: 600;">
+                                ${item.total}
+                            </div>
                         </div>
-                        <div class="item-details">
-                            <span>Servicios: Bs. ${parseFloat(emp.total_servicios || 0).toFixed(2)}</span>
-                            <span>Consumos: Bs. ${parseFloat(emp.total_consumos || 0).toFixed(2)}</span>
+                    `;
+                } else {
+                    return `
+                        <div class="dashboard-item warning-item" data-page="nominas" style="cursor: pointer;">
+                            <div class="item-main">
+                                <span class="item-title">⚠️ ${item.nombre}</span>
+                                <span class="item-subtitle">Sin nómina pagada</span>
+                            </div>
+                            <div class="item-details">
+                                <span>Servicios pendientes: ${item.servicios || 0}</span>
+                                <span>Consumos pendientes: ${item.consumos || 0}</span>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             }).join('');
 
         } catch (error) {
@@ -334,17 +469,22 @@
                 [fechaHoy]
             );
 
+            // Guardar referencias a productos para los modales
+            let productosBajoStock = [];
+            let productosSinStock = [];
+            
             if (!tasaHoy) {
                 warnings.push({
                     type: 'error',
                     message: '⚠️ No se ha establecido la tasa de cambio del día. Esto afectará el cálculo de precios.',
                     action: 'Establecer Tasa',
-                    page: 'tasas'
+                    page: 'tasas',
+                    actionType: 'tasa'
                 });
             }
 
             // Verificar productos con stock bajo
-            const productosBajoStock = await window.electronAPI.dbQuery(
+            productosBajoStock = await window.electronAPI.dbQuery(
                 `SELECT nombre, cantidad FROM Productos WHERE cantidad < 10 AND cantidad > 0 ORDER BY nombre ASC`
             );
             if (productosBajoStock.length > 0) {
@@ -352,12 +492,14 @@
                     type: 'warning',
                     message: `📦 ${productosBajoStock.length} producto(s) con stock bajo (< 10 unidades)`,
                     action: 'Ver Productos',
-                    page: 'productos'
+                    page: 'productos',
+                    actionType: 'stockBajo',
+                    productos: productosBajoStock
                 });
             }
 
             // Verificar productos sin stock
-            const productosSinStock = await window.electronAPI.dbQuery(
+            productosSinStock = await window.electronAPI.dbQuery(
                 `SELECT nombre FROM Productos WHERE cantidad = 0 ORDER BY nombre ASC`
             );
             if (productosSinStock.length > 0) {
@@ -365,9 +507,15 @@
                     type: 'error',
                     message: `❌ ${productosSinStock.length} producto(s) sin stock`,
                     action: 'Ver Productos',
-                    page: 'productos'
+                    page: 'productos',
+                    actionType: 'sinStock',
+                    productos: productosSinStock
                 });
             }
+            
+            // Guardar referencias globales para acceso desde los botones
+            window.dashboardProductosBajoStock = productosBajoStock;
+            window.dashboardProductosSinStock = productosSinStock;
 
             // Mostrar advertencias
             if (warnings.length === 0) {
@@ -375,7 +523,7 @@
                 return;
             }
 
-            container.innerHTML = warnings.map(w => {
+            container.innerHTML = warnings.map((w, index) => {
                 const banner = document.createElement('div');
                 banner.className = `warning-banner ${w.type}`;
                 const span = document.createElement('span');
@@ -383,11 +531,32 @@
                 const btn = document.createElement('button');
                 btn.className = 'btn btn-small';
                 btn.textContent = w.action;
-                btn.addEventListener('click', () => {
-                    if (window.navigateToPage) {
-                        window.navigateToPage(w.page);
-                    }
-                });
+                
+                // Asignar función según el tipo de advertencia
+                if (w.actionType === 'tasa') {
+                    // Botón para establecer tasa del día
+                    btn.addEventListener('click', () => {
+                        abrirModalTasaDashboard();
+                    });
+                } else if (w.actionType === 'stockBajo') {
+                    // Botón para ver productos con stock bajo
+                    btn.addEventListener('click', () => {
+                        mostrarProductosStockBajo(w.productos || window.dashboardProductosBajoStock || []);
+                    });
+                } else if (w.actionType === 'sinStock') {
+                    // Botón para ver productos sin stock
+                    btn.addEventListener('click', () => {
+                        mostrarProductosSinStock(w.productos || window.dashboardProductosSinStock || []);
+                    });
+                } else {
+                    // Navegar a la página correspondiente
+                    btn.addEventListener('click', () => {
+                        if (window.navigateToPage) {
+                            window.navigateToPage(w.page);
+                        }
+                    });
+                }
+                
                 banner.appendChild(span);
                 banner.appendChild(btn);
                 return banner.outerHTML;
@@ -415,6 +584,308 @@
             return `${dia}/${mes}/${año} ${hora}:${minuto}`;
         } catch (e) {
             return fechaHora;
+        }
+    }
+    
+    // Mostrar productos con stock bajo
+    function mostrarProductosStockBajo(productos) {
+        const modal = document.getElementById('productos-stock-bajo-modal');
+        const lista = document.getElementById('productos-stock-bajo-lista');
+        
+        if (!modal || !lista) return;
+        
+        if (productos.length === 0) {
+            lista.innerHTML = '<p>No hay productos con stock bajo</p>';
+        } else {
+            lista.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border-color);">
+                            <th style="text-align: left; padding: 10px;">Producto</th>
+                            <th style="text-align: right; padding: 10px;">Stock Actual</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${productos.map(p => `
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <td style="padding: 10px;">${p.nombre}</td>
+                                <td style="text-align: right; padding: 10px; color: #ff9800; font-weight: 600;">${p.cantidad} unidades</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        modal.classList.add('active');
+        
+        // Configurar botones del modal
+        const cerrarBtn = document.getElementById('cerrar-stock-bajo');
+        const closeBtn = document.getElementById('close-stock-bajo-modal');
+        const irProductosBtn = document.getElementById('ir-productos-stock-bajo');
+        
+        if (cerrarBtn) {
+            cerrarBtn.onclick = () => modal.classList.remove('active');
+        }
+        if (closeBtn) {
+            closeBtn.onclick = () => modal.classList.remove('active');
+        }
+        if (irProductosBtn) {
+            irProductosBtn.onclick = () => {
+                modal.classList.remove('active');
+                if (window.navigateToPage) {
+                    window.navigateToPage('productos');
+                }
+            };
+        }
+        
+        // Cerrar al hacer clic fuera del modal
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        };
+    }
+    
+    // Mostrar productos sin stock
+    function mostrarProductosSinStock(productos) {
+        const modal = document.getElementById('productos-sin-stock-modal');
+        const contenido = document.getElementById('productos-sin-stock-contenido');
+        
+        if (!modal || !contenido) {
+            console.error('Modal de productos sin stock no encontrado');
+            return;
+        }
+        
+        if (productos.length === 0) {
+            contenido.innerHTML = `
+                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px; text-align: center;">
+                    <p style="margin: 0; color: var(--text-secondary);">No hay productos sin stock</p>
+                </div>
+            `;
+        } else {
+            // Estilo similar a los reportes
+            contenido.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Resumen</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <p><strong>Total Productos sin Stock:</strong> ${productos.length}</p>
+                            <p><strong>Estado:</strong> <span style="color: #dc3545; font-weight: 600;">Requiere Atención</span></p>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Lista de Productos sin Stock (${productos.length})</h4>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <th style="text-align: left; padding: 8px;">#</th>
+                                    <th style="text-align: left; padding: 8px;">Nombre del Producto</th>
+                                    <th style="text-align: center; padding: 8px;">Stock Actual</th>
+                                    <th style="text-align: center; padding: 8px;">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${productos.map((p, index) => `
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 8px;">${index + 1}</td>
+                                        <td style="padding: 8px;">${p.nombre || 'Sin nombre'}</td>
+                                        <td style="text-align: center; padding: 8px; color: #dc3545; font-weight: 600;">0</td>
+                                        <td style="text-align: center; padding: 8px;">
+                                            <span style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">Sin Stock</span>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+        
+        modal.classList.add('active');
+        
+        // Los event listeners ya están configurados en initDashboard
+        // pero los reconfiguramos aquí para asegurar que funcionen
+        setTimeout(() => {
+            const cerrarBtn = document.getElementById('cerrar-sin-stock');
+            const closeBtn = document.getElementById('close-sin-stock-modal');
+            const irProductosBtn = document.getElementById('ir-productos-sin-stock');
+            
+            if (cerrarBtn) {
+                cerrarBtn.onclick = () => modal.classList.remove('active');
+            }
+            
+            if (closeBtn) {
+                closeBtn.onclick = () => modal.classList.remove('active');
+            }
+            
+            if (irProductosBtn) {
+                // Usar addEventListener en lugar de onclick para evitar conflictos
+                irProductosBtn.onclick = null; // Limpiar primero
+                irProductosBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    modal.classList.remove('active');
+                    if (window.navigateToPage) {
+                        window.navigateToPage('productos');
+                    } else {
+                        console.error('window.navigateToPage no está disponible');
+                        alert('Error: No se puede navegar a la página de productos');
+                    }
+                }, { once: false });
+            }
+        }, 50);
+    }
+    
+    // Abrir modal para establecer tasa del día desde dashboard
+    function abrirModalTasaDashboard() {
+        const modal = document.getElementById('tasa-dashboard-modal');
+        if (!modal) return;
+        
+        // Establecer fecha de hoy
+        const fechaInput = document.getElementById('tasa-dashboard-fecha');
+        if (fechaInput) {
+            if (window.obtenerFechaLocalInput) {
+                fechaInput.value = window.obtenerFechaLocalInput();
+            } else {
+                const hoy = new Date();
+                fechaInput.value = hoy.toISOString().split('T')[0];
+            }
+        }
+        
+        // Limpiar campo de tasa
+        const tasaInput = document.getElementById('tasa-dashboard-valor');
+        if (tasaInput) {
+            tasaInput.value = '';
+            // Aplicar formateo si está disponible
+            setTimeout(() => {
+                if (typeof formatearInputPrecio === 'function') {
+                    formatearInputPrecio(tasaInput);
+                }
+            }, 100);
+        }
+        
+        modal.classList.add('active');
+        
+        // Configurar botones del modal
+        const cerrarBtn = document.getElementById('cancel-tasa-dashboard');
+        const closeBtn = document.getElementById('close-tasa-dashboard-modal');
+        const form = document.getElementById('tasa-dashboard-form');
+        
+        if (cerrarBtn) {
+            cerrarBtn.onclick = () => modal.classList.remove('active');
+        }
+        if (closeBtn) {
+            closeBtn.onclick = () => modal.classList.remove('active');
+        }
+        if (form) {
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                await guardarTasaDesdeDashboard();
+            };
+        }
+        
+        // Cerrar al hacer clic fuera del modal
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        };
+        
+        // Enfocar el campo de tasa después de un pequeño delay
+        setTimeout(() => {
+            if (tasaInput) {
+                tasaInput.focus();
+            }
+        }, 200);
+    }
+    
+    // Guardar tasa desde dashboard
+    async function guardarTasaDesdeDashboard() {
+        const fechaInput = document.getElementById('tasa-dashboard-fecha');
+        const tasaInput = document.getElementById('tasa-dashboard-valor');
+        
+        if (!fechaInput || !tasaInput) {
+            mostrarError('Error: Campos no encontrados');
+            return;
+        }
+        
+        const fecha = fechaInput.value;
+        if (!fecha) {
+            mostrarError('La fecha es requerida');
+            return;
+        }
+        
+        // Obtener valor numérico de la tasa
+        let tasaValor = 0;
+        if (typeof window.obtenerValorNumerico === 'function' && tasaInput._formateadoPrecio) {
+            tasaValor = window.obtenerValorNumerico(tasaInput) || 0;
+        } else {
+            tasaValor = parseFloat(tasaInput.value.replace(/[^\d.]/g, '')) || 0;
+        }
+        
+        if (tasaValor <= 0) {
+            mostrarError('La tasa debe ser mayor a 0');
+            return;
+        }
+        
+        // Convertir fecha de YYYY-MM-DD a DD/MM/YYYY
+        const [year, month, day] = fecha.split('-');
+        const fechaFormato = `${day}/${month}/${year}`;
+        
+        try {
+            // Verificar si ya existe una tasa para esta fecha
+            const tasaExistente = await window.electronAPI.dbGet(
+                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+                [fechaFormato]
+            );
+            
+            if (tasaExistente) {
+                // Actualizar tasa existente
+                await window.electronAPI.dbRun(
+                    'UPDATE TasasCambio SET tasa_bs_por_dolar = ? WHERE id = ?',
+                    [tasaValor, tasaExistente.id]
+                );
+                mostrarExito('Tasa actualizada correctamente');
+            } else {
+                // Crear nueva tasa
+                await window.electronAPI.dbRun(
+                    'INSERT INTO TasasCambio (fecha, tasa_bs_por_dolar) VALUES (?, ?)',
+                    [fechaFormato, tasaValor]
+                );
+                mostrarExito('Tasa establecida correctamente');
+            }
+            
+            // Cerrar modal
+            document.getElementById('tasa-dashboard-modal').classList.remove('active');
+            
+            // Recargar dashboard para actualizar advertencias
+            await cargarDashboard();
+            
+        } catch (error) {
+            console.error('Error al guardar tasa:', error);
+            mostrarError('Error al guardar la tasa: ' + (error.message || 'Error desconocido'));
+        }
+    }
+    
+    // Funciones auxiliares para mostrar mensajes
+    function mostrarError(mensaje) {
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Error: ' + mensaje, 'error', 5000);
+        } else {
+            console.error('Error: ' + mensaje);
+            alert('Error: ' + mensaje);
+        }
+    }
+    
+    function mostrarExito(mensaje) {
+        if (typeof window.mostrarNotificacion === 'function') {
+            window.mostrarNotificacion('Éxito: ' + mensaje, 'success', 3000);
+        } else {
+            console.log('Éxito: ' + mensaje);
+            alert('Éxito: ' + mensaje);
         }
     }
 

@@ -11,6 +11,8 @@
     --border-color: #404040;
     --error-color: #ff4444;
     --success-color: #44ff44;
+    --tutorial-highlight: rgba(74, 158, 255, 0.3);
+    --tutorial-border: #4a9eff;
 }
 
 * {

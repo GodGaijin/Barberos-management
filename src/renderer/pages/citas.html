@@ -51,8 +51,13 @@
             <input type="hidden" id="cita-id">
             
             <div class="form-row">
-                <div class="form-group">
+                <div class="form-group" style="flex: 1;">
                     <label for="cita-cliente">Cliente</label>
+                    <div style="position: relative;">
+                        <input type="text" id="cita-cliente-search" placeholder="Buscar cliente..." class="search-input" style="width: 100%; color: var(--text-primary); margin-bottom: 8px;">
+                        <div id="citas-clientes-results-dropdown" class="search-results-dropdown" style="display: none;"></div>
+                    </div>
+                    <button type="button" id="btn-buscar-cliente-citas-db" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px; width: 100%; margin-bottom: 8px;" title="Buscar en base de datos">🔍 Buscar en Base de Datos</button>
                     <select id="cita-cliente" name="id_cliente">
                         <option value="">Sin cliente (reserva general)</option>
                     </select>

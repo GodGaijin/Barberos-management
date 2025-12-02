@@ -1,5 +1,7 @@
 // Estado de la aplicación
 let isAuthenticated = false;
+let inactivityTimer = null;
+const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutos en milisegundos
 
 // Elementos del DOM
 const loginScreen = document.getElementById('login-screen');
@@ -18,6 +20,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loginForm.addEventListener('submit', handleLogin);
     logoutBtn.addEventListener('click', handleLogout);
     
+    // Inicializar sistema de detección de inactividad
+    initInactivityDetection();
+    
     // Navegación
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
@@ -33,6 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializar sistema de actualizaciones (solo si está autenticado)
     if (isAuthenticated || localStorage.getItem('sessionActive') === 'true') {
         initUpdater();
+    }
+    
+    // Inicializar sistema de tutoriales
+    if (typeof window.initTutoriales === 'function') {
+        window.initTutoriales();
     }
     
     // Listener para cuando la ventana recupera el foco (desde Electron)
@@ -141,6 +151,8 @@ function showMainScreen() {
     loginScreen.classList.remove('active');
     mainScreen.classList.add('active');
     isAuthenticated = true;
+    // Reiniciar timer de inactividad al mostrar la pantalla principal
+    resetInactivityTimer();
 }
 
 // Manejar login
@@ -167,6 +179,8 @@ async function handleLogin(e) {
         // Verificar cambio de fecha al iniciar sesión
         verificarCambioFecha();
         showMainScreen();
+        // Reiniciar timer de inactividad
+        resetInactivityTimer();
         // Inicializar actualizaciones después del login
         initUpdater();
         
@@ -179,8 +193,74 @@ async function handleLogin(e) {
 // Manejar logout
 function handleLogout() {
     localStorage.removeItem('sessionActive');
+    clearInactivityTimer();
+    clearUpdateCheckInterval();
     showLoginScreen();
     loginForm.reset();
+}
+
+// Inicializar detección de inactividad
+function initInactivityDetection() {
+    // Eventos que indican actividad del usuario
+    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    
+    activityEvents.forEach(event => {
+        document.addEventListener(event, resetInactivityTimer, true);
+    });
+    
+    // También detectar cuando la ventana recupera el foco
+    window.addEventListener('focus', resetInactivityTimer);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            resetInactivityTimer();
+        }
+    });
+}
+
+// Reiniciar timer de inactividad
+function resetInactivityTimer() {
+    // Solo si el usuario está autenticado
+    if (!isAuthenticated && localStorage.getItem('sessionActive') !== 'true') {
+        return;
+    }
+    
+    // Limpiar timer anterior
+    clearInactivityTimer();
+    
+    // Establecer nuevo timer
+    inactivityTimer = setTimeout(() => {
+        handleInactivityTimeout();
+    }, INACTIVITY_TIMEOUT);
+}
+
+// Limpiar timer de inactividad
+function clearInactivityTimer() {
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+    }
+}
+
+// Manejar timeout de inactividad
+function handleInactivityTimeout() {
+    console.log('⏱️ Timeout de inactividad alcanzado. Cerrando sesión...');
+    
+    // Limpiar sesión
+    localStorage.removeItem('sessionActive');
+    clearInactivityTimer();
+    clearUpdateCheckInterval();
+    
+    // Mostrar mensaje al usuario
+    if (typeof window.mostrarNotificacion === 'function') {
+        window.mostrarNotificacion('Tu sesión ha expirado por inactividad. Por favor, inicia sesión nuevamente.', 'warning', 5000);
+    }
+    
+    // Cerrar sesión
+    showLoginScreen();
+    loginForm.reset();
+    
+    // Mostrar mensaje en el campo de error
+    showError('Tu sesión ha expirado por inactividad. Por favor, inicia sesión nuevamente.');
 }
 
 // Mostrar error
@@ -310,6 +390,8 @@ function getPageTitle(page) {
 }
 
 // Sistema de actualizaciones
+let updateCheckInterval = null;
+
 function initUpdater() {
     if (!window.updaterAPI) {
         console.warn('⚠️ updaterAPI no está disponible');
@@ -333,6 +415,18 @@ function initUpdater() {
         console.log('✅ Evento: Actualización descargada recibido:', info);
         showUpdateNotification(info, 'downloaded');
     });
+    
+    // Verificar actualizaciones al iniciar
+    verificarActualizacionesInicial();
+    
+    // Configurar verificación periódica cada 1 hora (3600000 ms)
+    const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hora
+    updateCheckInterval = setInterval(() => {
+        console.log('🔄 Verificación periódica de actualizaciones (cada 1 hora)...');
+        verificarActualizacionesPeriodica();
+    }, UPDATE_CHECK_INTERVAL);
+    
+    console.log('✅ Verificación periódica de actualizaciones configurada (cada 1 hora)');
     
     // Función global para verificar manualmente desde la consola
     window.verificarActualizacionesManual = async function() {
@@ -377,6 +471,46 @@ function initUpdater() {
     };
     
     console.log('💡 Para verificar actualizaciones manualmente, ejecuta: window.verificarActualizacionesManual()');
+}
+
+// Verificar actualizaciones al iniciar
+async function verificarActualizacionesInicial() {
+    console.log('🔍 Verificando actualizaciones al iniciar...');
+    try {
+        if (window.updaterAPI && window.updaterAPI.checkForUpdates) {
+            await window.updaterAPI.checkForUpdates();
+        }
+    } catch (error) {
+        console.error('❌ Error al verificar actualizaciones al iniciar:', error);
+    }
+}
+
+// Verificar actualizaciones periódicamente
+async function verificarActualizacionesPeriodica() {
+    // Solo verificar si el usuario está autenticado
+    if (!isAuthenticated && localStorage.getItem('sessionActive') !== 'true') {
+        console.log('⏸️ Usuario no autenticado, omitiendo verificación de actualizaciones');
+        return;
+    }
+    
+    console.log('🔄 Verificación periódica de actualizaciones...');
+    try {
+        if (window.updaterAPI && window.updaterAPI.checkForUpdates) {
+            const result = await window.updaterAPI.checkForUpdates();
+            console.log('📋 Resultado de verificación periódica:', result);
+        }
+    } catch (error) {
+        console.error('❌ Error en verificación periódica de actualizaciones:', error);
+    }
+}
+
+// Limpiar interval de actualizaciones al cerrar sesión
+function clearUpdateCheckInterval() {
+    if (updateCheckInterval) {
+        clearInterval(updateCheckInterval);
+        updateCheckInterval = null;
+        console.log('🛑 Verificación periódica de actualizaciones detenida');
+    }
 }
 
 // Mostrar notificación de actualización

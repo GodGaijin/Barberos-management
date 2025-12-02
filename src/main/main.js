@@ -295,6 +295,60 @@ ipcMain.handle('download-update', () => {
 });
 
 // Handler para forzar el foco de la ventana (solución a campos bloqueados)
+// Handlers para tutoriales
+ipcMain.handle('tutorial-get-progress', async (event, tutorialId) => {
+  try {
+    if (!db) return { success: false, error: 'Base de datos no disponible' };
+    const progress = db.get('SELECT * FROM TutorialesProgreso WHERE tutorial_id = ?', [tutorialId]);
+    return { success: true, progress: progress || null };
+  } catch (error) {
+    console.error('Error al obtener progreso de tutorial:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('tutorial-save-progress', async (event, tutorialId, etapa, completado, datosAdicionales = null) => {
+  try {
+    if (!db) return { success: false, error: 'Base de datos no disponible' };
+    
+    const fechaCompletado = completado ? new Date().toISOString() : null;
+    const datosJson = datosAdicionales ? JSON.stringify(datosAdicionales) : null;
+    
+    // Verificar si existe
+    const existing = db.get('SELECT * FROM TutorialesProgreso WHERE tutorial_id = ?', [tutorialId]);
+    
+    if (existing) {
+      // Actualizar
+      db.run(
+        'UPDATE TutorialesProgreso SET etapa_actual = ?, completado = ?, fecha_completado = ?, datos_adicionales = ?, updated_at = CURRENT_TIMESTAMP WHERE tutorial_id = ?',
+        [etapa, completado ? 1 : 0, fechaCompletado, datosJson, tutorialId]
+      );
+    } else {
+      // Insertar
+      db.run(
+        'INSERT INTO TutorialesProgreso (tutorial_id, etapa_actual, completado, fecha_completado, datos_adicionales) VALUES (?, ?, ?, ?, ?)',
+        [tutorialId, etapa, completado ? 1 : 0, fechaCompletado, datosJson]
+      );
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error al guardar progreso de tutorial:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('tutorial-get-all-progress', async () => {
+  try {
+    if (!db) return { success: false, error: 'Base de datos no disponible' };
+    const allProgress = db.query('SELECT * FROM TutorialesProgreso');
+    return { success: true, progress: allProgress };
+  } catch (error) {
+    console.error('Error al obtener todos los progresos:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.on('fix-focus', () => {
   if (mainWindow) {
     // Primero desenfocamos, luego enfocamos para simular el Alt+Tab
