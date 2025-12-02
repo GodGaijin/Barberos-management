@@ -303,6 +303,26 @@
                 filtroFechaActual = filterFecha.value;
                 filterFecha.onchange = () => {
                     filtroFechaActual = filterFecha.value;
+                    // Limpiar fecha específica cuando se cambia el filtro predefinido
+                    const fechaEspecifica = document.getElementById('filter-fecha-especifica');
+                    if (fechaEspecifica) {
+                        fechaEspecifica.value = '';
+                    }
+                    filtrarTransacciones();
+                };
+            }
+            
+            // Filtro de fecha específica
+            const filterFechaEspecifica = document.getElementById('filter-fecha-especifica');
+            if (filterFechaEspecifica) {
+                filterFechaEspecifica.onchange = () => {
+                    // Si se selecciona una fecha específica, cambiar el desplegable a "todas" para evitar conflictos
+                    if (filterFechaEspecifica.value) {
+                        if (filterFecha) {
+                            filterFecha.value = 'todas';
+                            filtroFechaActual = 'todas';
+                        }
+                    }
                     filtrarTransacciones();
                 };
             }
@@ -1348,6 +1368,13 @@
         }
     }
     
+    // Función auxiliar para convertir fecha de formato YYYY-MM-DD a DD/MM/YYYY
+    function convertirFechaInputADisplay(fechaInput) {
+        if (!fechaInput) return null;
+        const [año, mes, dia] = fechaInput.split('-');
+        return `${dia}/${mes}/${año}`;
+    }
+    
     // Función auxiliar para comparar fechas en formato DD/MM/YYYY
     function compararFechas(fecha1, fecha2) {
         if (!fecha1 || !fecha2) return 0;
@@ -1365,11 +1392,24 @@
     function filtrarTransacciones() {
         const searchTerm = document.getElementById('search-transaccion').value.toLowerCase();
         const filterEstado = document.getElementById('filter-estado').value;
+        const filterFechaEspecifica = document.getElementById('filter-fecha-especifica');
 
         let transaccionesFiltradas = transacciones;
 
-        // Filtrar por fecha
-        if (filtroFechaActual && filtroFechaActual !== 'todas') {
+        // Filtrar por fecha - prioridad a fecha específica si está seleccionada
+        const fechaEspecifica = filterFechaEspecifica ? filterFechaEspecifica.value : null;
+        
+        if (fechaEspecifica) {
+            // Usar fecha específica seleccionada
+            const fechaFiltro = convertirFechaInputADisplay(fechaEspecifica);
+            
+            transaccionesFiltradas = transaccionesFiltradas.filter(transaccion => {
+                const fechaApertura = convertirFechaAComparable(transaccion.fecha_apertura);
+                if (!fechaApertura) return false;
+                return fechaApertura === fechaFiltro;
+            });
+        } else if (filtroFechaActual && filtroFechaActual !== 'todas') {
+            // Usar filtro predefinido
             const fechaFiltro = obtenerFechaFiltro(filtroFechaActual);
             
             transaccionesFiltradas = transaccionesFiltradas.filter(transaccion => {
