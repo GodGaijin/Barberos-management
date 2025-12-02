@@ -35,6 +35,9 @@
     let transaccionesFiltradas = [];
     let contadorFilaProducto = 0;
     let contadorFilaPropina = 0;
+    
+    // Variable para el filtro de fecha actual (por defecto: hoy)
+    let filtroFechaActual = 'hoy';
 
     // Inicialización - función exportada para ser llamada desde main.js
     window.initTransacciones = function() {
@@ -292,6 +295,25 @@
             if (filterEstado) {
                 filterEstado.onchange = filtrarTransacciones;
             }
+            
+            // Filtros de fecha
+            const dateFilterButtons = document.querySelectorAll('.date-filter-btn');
+            dateFilterButtons.forEach(btn => {
+                btn.onclick = () => {
+                    // Remover clase active de todos los botones
+                    dateFilterButtons.forEach(b => {
+                        b.classList.remove('active', 'btn-primary');
+                        b.classList.add('btn-secondary');
+                    });
+                    // Añadir clase active al botón seleccionado
+                    btn.classList.add('active', 'btn-primary');
+                    btn.classList.remove('btn-secondary');
+                    // Actualizar filtro de fecha
+                    filtroFechaActual = btn.getAttribute('data-filter');
+                    // Aplicar filtro
+                    filtrarTransacciones();
+                };
+            });
 
             // Confirmar eliminación
             const confirmDelete = document.getElementById('confirm-delete');
@@ -1099,7 +1121,8 @@
             if (window.transaccionesModule.transacciones.length > 0) {
                 transacciones.push(...window.transaccionesModule.transacciones);
             }
-            mostrarTransacciones(transacciones);
+            // Aplicar filtro por defecto (hoy) al cargar
+            filtrarTransacciones();
         } catch (error) {
             console.error('Error al cargar transacciones:', error);
             const tbody = document.getElementById('transacciones-table-body');
@@ -1256,11 +1279,120 @@
     window.mostrarTransacciones = mostrarTransacciones;
 
     // Filtrar transacciones
+    // Función auxiliar para convertir fecha a formato DD/MM/YYYY para comparación
+    function convertirFechaAComparable(fechaStr) {
+        if (!fechaStr) return null;
+        
+        // Si ya está en formato DD/MM/YYYY
+        if (fechaStr.includes('/') && fechaStr.length === 10) {
+            return fechaStr;
+        }
+        
+        // Si está en formato ISO (YYYY-MM-DD o YYYY-MM-DDTHH:MM:SS)
+        if (fechaStr.includes('-')) {
+            let fechaISO = fechaStr;
+            if (fechaStr.includes('T')) {
+                fechaISO = fechaStr.split('T')[0];
+            }
+            const [year, month, day] = fechaISO.split('-');
+            return `${day}/${month}/${year}`;
+        }
+        
+        return null;
+    }
+    
+    // Función auxiliar para obtener la fecha según el filtro seleccionado
+    function obtenerFechaFiltro(filtro) {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        
+        switch(filtro) {
+            case 'hoy':
+                return {
+                    fecha: `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`,
+                    desde: null,
+                    hasta: null
+                };
+            case 'ayer':
+                const ayer = new Date(hoy);
+                ayer.setDate(ayer.getDate() - 1);
+                return {
+                    fecha: `${String(ayer.getDate()).padStart(2, '0')}/${String(ayer.getMonth() + 1).padStart(2, '0')}/${ayer.getFullYear()}`,
+                    desde: null,
+                    hasta: null
+                };
+            case 'semana':
+                const haceSemana = new Date(hoy);
+                haceSemana.setDate(haceSemana.getDate() - 7);
+                return {
+                    fecha: null,
+                    desde: `${String(haceSemana.getDate()).padStart(2, '0')}/${String(haceSemana.getMonth() + 1).padStart(2, '0')}/${haceSemana.getFullYear()}`,
+                    hasta: `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`
+                };
+            case 'año':
+                const haceAño = new Date(hoy);
+                haceAño.setFullYear(haceAño.getFullYear() - 1);
+                return {
+                    fecha: null,
+                    desde: `${String(haceAño.getDate()).padStart(2, '0')}/${String(haceAño.getMonth() + 1).padStart(2, '0')}/${haceAño.getFullYear()}`,
+                    hasta: `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`
+                };
+            case 'todas':
+            default:
+                return {
+                    fecha: null,
+                    desde: null,
+                    hasta: null
+                };
+        }
+    }
+    
+    // Función auxiliar para comparar fechas en formato DD/MM/YYYY
+    function compararFechas(fecha1, fecha2) {
+        if (!fecha1 || !fecha2) return 0;
+        const [dia1, mes1, año1] = fecha1.split('/').map(Number);
+        const [dia2, mes2, año2] = fecha2.split('/').map(Number);
+        
+        const date1 = new Date(año1, mes1 - 1, dia1);
+        const date2 = new Date(año2, mes2 - 1, dia2);
+        
+        if (date1 < date2) return -1;
+        if (date1 > date2) return 1;
+        return 0;
+    }
+
     function filtrarTransacciones() {
         const searchTerm = document.getElementById('search-transaccion').value.toLowerCase();
         const filterEstado = document.getElementById('filter-estado').value;
 
         let transaccionesFiltradas = transacciones;
+
+        // Filtrar por fecha
+        if (filtroFechaActual && filtroFechaActual !== 'todas') {
+            const fechaFiltro = obtenerFechaFiltro(filtroFechaActual);
+            
+            transaccionesFiltradas = transaccionesFiltradas.filter(transaccion => {
+                // Usar fecha_apertura para el filtro
+                const fechaApertura = convertirFechaAComparable(transaccion.fecha_apertura);
+                
+                if (!fechaApertura) return false;
+                
+                // Si es filtro de fecha específica (hoy, ayer)
+                if (fechaFiltro.fecha) {
+                    return fechaApertura === fechaFiltro.fecha;
+                }
+                
+                // Si es filtro de rango (semana, año)
+                if (fechaFiltro.desde && fechaFiltro.hasta) {
+                    const comparacionDesde = compararFechas(fechaApertura, fechaFiltro.desde);
+                    const comparacionHasta = compararFechas(fechaApertura, fechaFiltro.hasta);
+                    // La fecha debe ser >= desde y <= hasta
+                    return comparacionDesde >= 0 && comparacionHasta <= 0;
+                }
+                
+                return true;
+            });
+        }
 
         // Filtrar por estado
         if (filterEstado !== 'all') {

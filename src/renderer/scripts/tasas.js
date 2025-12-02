@@ -21,6 +21,13 @@
     // Inicialización - función exportada para ser llamada desde main.js
     window.initTasas = function() {
         console.log('initTasas llamado');
+        // Verificar que estamos en la página de tasas
+        const tbody = document.getElementById('tasas-table-body');
+        if (!tbody) {
+            console.warn('initTasas llamado pero no estamos en la página de tasas. Ignorando...');
+            return;
+        }
+        
         // Siempre reconfigurar los event listeners porque el DOM se recrea al navegar
         // Pequeño delay para asegurar que el DOM esté completamente cargado
         setTimeout(() => {
@@ -129,11 +136,15 @@
     // Cargar tasas desde la base de datos
     async function cargarTasas() {
         try {
-            console.log('Iniciando carga de tasas...');
+            // Verificar que estamos en la página de tasas
             const tbody = document.getElementById('tasas-table-body');
-            if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="4" class="loading">Cargando tasas...</td></tr>';
+            if (!tbody) {
+                console.warn('cargarTasas: tbody no encontrado. No estamos en la página de tasas.');
+                return;
             }
+            
+            console.log('Iniciando carga de tasas...');
+            tbody.innerHTML = '<tr><td colspan="4" class="loading">Cargando tasas...</td></tr>';
             
             // Verificar que electronAPI esté disponible
             if (!window.electronAPI || !window.electronAPI.dbQuery) {
@@ -166,6 +177,11 @@
     // Mostrar tasas en la tabla
     function mostrarTasas(listaTasas) {
         const tbody = document.getElementById('tasas-table-body');
+        
+        if (!tbody) {
+            console.warn('mostrarTasas: tbody no encontrado. No estamos en la página de tasas.');
+            return;
+        }
         
         if (listaTasas.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No hay tasas registradas</td></tr>';
@@ -268,6 +284,15 @@
     // Actualizar tasa actual del día (la más reciente)
     async function actualizarTasaActual() {
         try {
+            const fechaElement = document.getElementById('tasa-actual-fecha');
+            const valorElement = document.getElementById('tasa-actual-valor');
+            
+            // Verificar que los elementos existan (solo si estamos en la página de tasas)
+            if (!fechaElement || !valorElement) {
+                // No estamos en la página de tasas, salir silenciosamente
+                return;
+            }
+            
             const hoy = new Date();
             const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
             
@@ -276,9 +301,6 @@
                 'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
                 [fechaHoy]
             );
-            
-            const fechaElement = document.getElementById('tasa-actual-fecha');
-            const valorElement = document.getElementById('tasa-actual-valor');
             
             if (tasaHoy) {
                 fechaElement.textContent = fechaHoy;
