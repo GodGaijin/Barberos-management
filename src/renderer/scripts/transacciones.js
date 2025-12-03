@@ -1815,7 +1815,7 @@
         if (!totalGeneralInput) return;
         
         let totalGeneralBs = 0;
-        let totalGeneralDolares = 0;
+        let totalPropinasDolares = 0; // Solo propinas en dólares
         
         // Sumar servicios
         const filasServicios = document.querySelectorAll('.servicio-fila');
@@ -1846,7 +1846,7 @@
                 } else {
                     propinaDolares = parseFloat(propinaDolaresInput.value.replace(/[^\d.]/g, '')) || 0;
                 }
-                totalGeneralDolares += propinaDolares;
+                totalPropinasDolares += propinaDolares;
             }
         });
         
@@ -1883,14 +1883,56 @@
                 } else {
                     propinaDolares = parseFloat(propinaDolaresInput.value.replace(/[^\d.]/g, '')) || 0;
                 }
-                totalGeneralDolares += propinaDolares;
+                totalPropinasDolares += propinaDolares;
             }
         });
         
+        // Obtener la tasa de cambio del día para convertir entre monedas
+        let tasaCambio = null;
+        try {
+            const fechaHoy = new Date();
+            const dia = String(fechaHoy.getDate()).padStart(2, '0');
+            const mes = String(fechaHoy.getMonth() + 1).padStart(2, '0');
+            const año = fechaHoy.getFullYear();
+            const fechaHoyStr = `${dia}/${mes}/${año}`;
+            
+            const tasaMasReciente = await window.electronAPI.dbGet(
+                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+                [fechaHoyStr]
+            );
+            
+            if (tasaMasReciente && tasaMasReciente.tasa_bs_por_dolar && tasaMasReciente.tasa_bs_por_dolar > 0) {
+                tasaCambio = tasaMasReciente.tasa_bs_por_dolar;
+            }
+        } catch (error) {
+            console.error('Error al obtener tasa de cambio para calcular totales:', error);
+        }
+        
+        // Separar el total en bolívares (sin propinas en dólares) para calcular correctamente
+        const totalBsSinPropinasDolares = totalGeneralBs;
+        
+        // Convertir propinas en dólares a bolívares y sumarlas al total en bolívares
+        let propinasDolaresEnBs = 0;
+        if (tasaCambio && totalPropinasDolares > 0) {
+            propinasDolaresEnBs = totalPropinasDolares * tasaCambio;
+            totalGeneralBs += propinasDolaresEnBs;
+        }
+        
         totalGeneralInput.value = totalGeneralBs.toFixed(2);
         
-        // Total en dólares es independiente: solo suma de propinas en dólares
-        // No depende de la tasa del día, solo de lo que se pagó directamente en dólares
+        // Calcular total en dólares: (servicios+productos+propinasBs) / tasa + propinasDolares
+        let totalGeneralDolares = 0;
+        
+        if (tasaCambio && tasaCambio > 0) {
+            // Convertir el total en bolívares (sin propinas en dólares) a dólares
+            const totalBsEnDolares = totalBsSinPropinasDolares / tasaCambio;
+            // Sumar las propinas en dólares directamente
+            totalGeneralDolares = totalBsEnDolares + totalPropinasDolares;
+        } else {
+            // Si no hay tasa de cambio, solo mostrar las propinas en dólares
+            totalGeneralDolares = totalPropinasDolares;
+        }
+        
         if (totalGeneralDolaresInput) {
             totalGeneralDolaresInput.value = totalGeneralDolares.toFixed(2);
         }
@@ -1956,12 +1998,12 @@
             
             // Calcular valores
             // Determinar si es pago mixto o solo una moneda
-            const esPagoMixto = (tieneMetodosDolares || tieneEntidadesDolares) && (tieneMetodosBs || tieneEntidadesBs);
+            const esPagoMixtoCalculo = (tieneMetodosDolares || tieneEntidadesDolares) && (tieneMetodosBs || tieneEntidadesBs);
             
             let pagadoBs = 0;
             let pagadoDolares = 0;
             
-            if (esPagoMixto) {
+            if (esPagoMixtoCalculo) {
                 // Pago mixto: usar ambos totales
                 pagadoBs = totalBs;
                 pagadoDolares = totalDolares;
@@ -2276,8 +2318,8 @@
         const pagadoBs = 0;
         const pagadoDolares = 0;
         
-        // Total en dólares es independiente: solo suma de propinas en dólares
-        // No depende de la tasa del día, solo de lo que se pagó directamente en dólares
+        // Total en dólares ya está calculado correctamente en actualizarTotalGeneral()
+        // Incluye: (total en bolívares / tasa de cambio) + propinas en dólares
         const totalDolaresFinal = totalDolares;
 
         // Generar resúmenes
@@ -2539,6 +2581,16 @@
             return;
         }
 
+        // Verificar contraseña para operación crítica
+        try {
+            if (window.verificarContraseñaOperacionCritica) {
+                await window.verificarContraseñaOperacionCritica();
+            }
+        } catch (error) {
+            // Si el usuario cancela o la contraseña es incorrecta, no continuar
+            return;
+        }
+
         // Obtener métodos de pago seleccionados
         const metodosSeleccionados = Array.from(document.querySelectorAll('.metodo-pago-checkbox:checked'))
             .map(cb => cb.value);
@@ -2609,6 +2661,25 @@
         const totalBs = parseFloat(transaccion.total_en_bs || 0);
         const totalDolares = parseFloat(transaccion.total_en_dolares || 0);
         
+        // Obtener la tasa de cambio del día para validaciones
+        const fechaHoy = new Date();
+        const dia = String(fechaHoy.getDate()).padStart(2, '0');
+        const mes = String(fechaHoy.getMonth() + 1).padStart(2, '0');
+        const año = fechaHoy.getFullYear();
+        const fechaHoyStr = `${dia}/${mes}/${año}`;
+        let tasaCambio = null;
+        try {
+            const tasaMasReciente = await window.electronAPI.dbGet(
+                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+                [fechaHoyStr]
+            );
+            if (tasaMasReciente) {
+                tasaCambio = tasaMasReciente.tasa_bs_por_dolar;
+            }
+        } catch (error) {
+            console.error('Error al obtener tasa de cambio:', error);
+        }
+        
         // Definir métodos y entidades que son en dólares
         const metodosDolares = ['efectivo_divisa', 'divisa'];
         const entidadesDolares = ['Binance', 'Zelle'];
@@ -2623,21 +2694,117 @@
         const tieneMetodosBs = metodosSeleccionados.some(m => metodosBs.includes(m));
         const tieneEntidadesBs = entidadesSeleccionadas.some(e => entidadesBs.includes(e));
         
+        // Determinar si es pago mixto
+        const esPagoMixto = (tieneMetodosDolares || tieneEntidadesDolares) && (tieneMetodosBs || tieneEntidadesBs);
+        
+        // Si es pago mixto, validar solo la suma equivalente, no los montos individuales
+        if (esPagoMixto && tasaCambio && tasaCambio > 0) {
+            // Verificar que se hayan ingresado montos en ambas monedas
+            if (pagadoBs === 0 || pagadoDolares === 0) {
+                mostrarError('En pago mixto debe ingresar montos en ambas monedas (bolívares y dólares). Por favor, ingrese los valores manualmente.');
+                return;
+            }
+            
+            // Convertir todo a una sola moneda para verificar equivalencia
+            const totalEquivalenteEsperadoBs = totalBs;
+            
+            const pagadoEquivalenteBs = pagadoBs;
+            const pagadoEquivalenteDolaresEnBs = pagadoDolares * tasaCambio;
+            const pagadoEquivalenteTotalBs = pagadoEquivalenteBs + pagadoEquivalenteDolaresEnBs;
+            
+            const diferenciaEquivalente = pagadoEquivalenteTotalBs - totalEquivalenteEsperadoBs;
+            const diferenciaEquivalenteAbs = Math.abs(diferenciaEquivalente);
+            // Permitir una pequeña diferencia por redondeo (equivalente a 0.01 dólares en bolívares)
+            const tolerancia = tasaCambio * 0.01;
+            if (diferenciaEquivalenteAbs > tolerancia) {
+                if (diferenciaEquivalente > 0) {
+                    // El monto pagado EXCEDE el total - NO PERMITIR
+                    mostrarError(`En el pago mixto, la suma de los montos pagados excede el total. ` +
+                              `Total esperado: ${totalEquivalenteEsperadoBs.toFixed(2)} Bs (o $${totalDolares.toFixed(2)}). ` +
+                              `Pagado: ${pagadoBs.toFixed(2)} Bs + $${pagadoDolares.toFixed(2)} = ${pagadoEquivalenteTotalBs.toFixed(2)} Bs. ` +
+                              `Exceso: ${diferenciaEquivalenteAbs.toFixed(2)} Bs. Por favor, corrija los montos.`);
+                    return;
+                } else {
+                    // El monto pagado es MENOR que el total - NO PERMITIR
+                    mostrarError(`En el pago mixto, la suma de los montos pagados es menor que el total. ` +
+                              `Total esperado: ${totalEquivalenteEsperadoBs.toFixed(2)} Bs (o $${totalDolares.toFixed(2)}). ` +
+                              `Pagado: ${pagadoBs.toFixed(2)} Bs + $${pagadoDolares.toFixed(2)} = ${pagadoEquivalenteTotalBs.toFixed(2)} Bs. ` +
+                              `Falta: ${diferenciaEquivalenteAbs.toFixed(2)} Bs. Por favor, corrija los montos.`);
+                    return;
+                }
+            }
+        } else if (!esPagoMixto) {
+            // Si NO es pago mixto, validar los montos individuales
+            // Validación para dólares (siempre que haya total en dólares o se seleccione método en dólares)
+            if (totalDolares > 0 || tieneMetodosDolares || tieneEntidadesDolares) {
+                if (pagadoDolares > 0) {
+                    const diferencia = pagadoDolares - totalDolares;
+                    const diferenciaAbs = Math.abs(diferencia);
+                    // Permitir una pequeña diferencia por redondeo (0.01 dólares)
+                    if (diferenciaAbs > 0.01) {
+                        if (diferencia > 0) {
+                            // El monto pagado EXCEDE el total - NO PERMITIR
+                            mostrarError(`El monto pagado en dólares ($${pagadoDolares.toFixed(2)}) excede el total a pagar ($${totalDolares.toFixed(2)}). ` +
+                                       `Diferencia: $${diferenciaAbs.toFixed(2)}. Por favor, corrija el monto.`);
+                            return;
+                        } else {
+                            // El monto pagado es MENOR que el total - NO PERMITIR (debe pagar el total completo)
+                            mostrarError(`El monto pagado en dólares ($${pagadoDolares.toFixed(2)}) es menor que el total a pagar ($${totalDolares.toFixed(2)}). ` +
+                                       `Falta: $${diferenciaAbs.toFixed(2)}. Por favor, corrija el monto.`);
+                            return;
+                        }
+                    }
+                } else if (pagadoDolares === 0 && totalDolares > 0 && (tieneMetodosDolares || tieneEntidadesDolares)) {
+                    // Si hay total en dólares y se seleccionó método en dólares pero no se ingresó monto pagado, advertir
+                    mostrarError(`El total a pagar es de $${totalDolares.toFixed(2)} pero no se ingresó cantidad pagada en dólares.`);
+                    return;
+                }
+            }
+            
+            // Validación para bolívares (siempre que haya total en bolívares o se seleccione método en bolívares)
+            if (totalBs > 0 || tieneMetodosBs || tieneEntidadesBs) {
+                if (pagadoBs > 0) {
+                    const diferencia = pagadoBs - totalBs;
+                    const diferenciaAbs = Math.abs(diferencia);
+                    // Permitir una pequeña diferencia por redondeo (0.01 bolívares)
+                    if (diferenciaAbs > 0.01) {
+                        if (diferencia > 0) {
+                            // El monto pagado EXCEDE el total - NO PERMITIR
+                            mostrarError(`El monto pagado en bolívares (${pagadoBs.toFixed(2)} Bs) excede el total a pagar (${totalBs.toFixed(2)} Bs). ` +
+                                       `Diferencia: ${diferenciaAbs.toFixed(2)} Bs. Por favor, corrija el monto.`);
+                            return;
+                        } else {
+                            // El monto pagado es MENOR que el total - NO PERMITIR (debe pagar el total completo)
+                            mostrarError(`El monto pagado en bolívares (${pagadoBs.toFixed(2)} Bs) es menor que el total a pagar (${totalBs.toFixed(2)} Bs). ` +
+                                       `Falta: ${diferenciaAbs.toFixed(2)} Bs. Por favor, corrija el monto.`);
+                            return;
+                        }
+                    }
+                } else if (pagadoBs === 0 && totalBs > 0 && (tieneMetodosBs || tieneEntidadesBs)) {
+                    // Si hay total en bolívares y se seleccionó método en bolívares pero no se ingresó monto pagado, advertir
+                    mostrarError(`El total a pagar es de ${totalBs.toFixed(2)} Bs pero no se ingresó cantidad pagada en bolívares.`);
+                    return;
+                }
+            }
+        } else if (esPagoMixto && (!tasaCambio || tasaCambio <= 0)) {
+            // Si es pago mixto pero no hay tasa de cambio, no se puede validar
+            mostrarError('No se puede validar el pago mixto porque no hay tasa de cambio establecida para el día. Por favor, establezca la tasa de cambio primero.');
+            return;
+        }
+        
         // Calcular pagado_bs y pagado_dolares basándose en métodos y entidades
         // Si el usuario ya ingresó valores manualmente, usarlos; si no, calcular automáticamente
         let pagadoBsCalculado = 0;
         let pagadoDolaresCalculado = 0;
         
-        // Determinar si es pago mixto o solo una moneda
-        const esPagoMixto = (tieneMetodosDolares || tieneEntidadesDolares) && (tieneMetodosBs || tieneEntidadesBs);
-        
+        // esPagoMixto ya fue declarado arriba, solo usarlo aquí
         if (esPagoMixto) {
-            // Pago mixto: usar los valores que el usuario ingresó o calcular proporcionalmente
-            // Si el usuario no ingresó valores, usar los totales
-            if (pagadoBs === 0 && pagadoDolares === 0) {
-                pagadoBsCalculado = totalBs;
-                pagadoDolaresCalculado = totalDolares;
-            }
+            // Pago mixto: SIEMPRE usar los valores que el usuario ingresó manualmente
+            // No calcular automáticamente porque no sabemos cómo se distribuyó el pago
+            // Si el usuario no ingresó valores, ya se validó arriba y se mostró error
+            // En este caso, mantener los valores que el usuario ingresó (ya están en pagadoBs y pagadoDolares)
+            pagadoBsCalculado = pagadoBs; // Usar el valor ingresado
+            pagadoDolaresCalculado = pagadoDolares; // Usar el valor ingresado
         } else if (tieneMetodosDolares || tieneEntidadesDolares) {
             // Solo métodos/entidades en dólares: se pagó solo en dólares
             pagadoDolaresCalculado = totalDolares;
@@ -2691,29 +2858,15 @@
 
         // Fecha de cierre - usar formato DD/MM/YYYY HH:MM:SS
         const fechaCierre = new Date();
-        const dia = String(fechaCierre.getDate()).padStart(2, '0');
-        const mes = String(fechaCierre.getMonth() + 1).padStart(2, '0');
-        const año = fechaCierre.getFullYear();
+        const diaCierre = String(fechaCierre.getDate()).padStart(2, '0');
+        const mesCierre = String(fechaCierre.getMonth() + 1).padStart(2, '0');
+        const añoCierre = fechaCierre.getFullYear();
         const hora = String(fechaCierre.getHours()).padStart(2, '0');
         const minuto = String(fechaCierre.getMinutes()).padStart(2, '0');
         const segundo = String(fechaCierre.getSeconds()).padStart(2, '0');
-        const fechaCierreStr = `${dia}/${mes}/${año} ${hora}:${minuto}:${segundo}`;
+        const fechaCierreStr = `${diaCierre}/${mesCierre}/${añoCierre} ${hora}:${minuto}:${segundo}`;
         
-        // Obtener la tasa de cambio más reciente del día
-        const fechaHoy = `${dia}/${mes}/${año}`;
-        let tasaCambio = null;
-        try {
-            const tasaMasReciente = await window.electronAPI.dbGet(
-                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
-                [fechaHoy]
-            );
-            if (tasaMasReciente) {
-                tasaCambio = tasaMasReciente.tasa_bs_por_dolar;
-            }
-        } catch (error) {
-            console.error('Error al obtener tasa de cambio:', error);
-            // Continuar sin tasa si hay error
-        }
+        // La tasa de cambio ya fue obtenida anteriormente para las validaciones
 
         try {
             await window.electronAPI.dbRun(

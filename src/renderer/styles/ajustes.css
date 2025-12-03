@@ -1,0 +1,261 @@
+/* Estilos para la página de Ajustes */
+
+/* Tabs */
+.tabs-container {
+    margin-bottom: 20px;
+}
+
+.tabs {
+    display: flex;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 12px 24px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.tab-button:hover {
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+}
+
+.tab-button.active {
+    color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Form Section */
+.form-section {
+    margin-bottom: 30px;
+}
+
+.form-section h4 {
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    font-size: 18px;
+}
+
+.form-description {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Lista de empleados con sliders */
+.empleados-porcentajes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.empleado-porcentaje-item {
+    background: var(--bg-secondary);
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.empleado-info {
+    margin-bottom: 15px;
+}
+
+.empleado-info strong {
+    color: var(--text-primary);
+    font-size: 16px;
+}
+
+/* Slider Container */
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.porcentaje-slider {
+    flex: 1;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.porcentaje-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.porcentaje-slider::-webkit-slider-thumb:hover {
+    background: var(--accent-hover);
+}
+
+.porcentaje-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    cursor: pointer;
+    border: none;
+    transition: background 0.3s ease;
+}
+
+.porcentaje-slider::-moz-range-thumb:hover {
+    background: var(--accent-hover);
+}
+
+.slider-value-display {
+    min-width: 80px;
+    text-align: center;
+}
+
+.porcentaje-valor {
+    color: var(--accent-primary);
+    font-size: 18px;
+    font-weight: 600;
+    display: inline-block;
+    padding: 5px 12px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    min-width: 70px;
+}
+
+/* Info message */
+.info-message {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+}
+
+/* Form elements */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.form-select,
+.form-input {
+    width: 100%;
+    padding: 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.form-select:focus,
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+/* Checkbox and Radio */
+.checkbox-label,
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.checkbox-label input[type="checkbox"],
+.radio-label input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent-primary);
+}
+
+/* Danger button */
+.btn-danger {
+    background: var(--error-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.3s ease;
+}
+
+.btn-danger:hover {
+    background: #ff6666;
+}
+
+/* Backups list */
+.backup-item {
+    background: var(--bg-secondary);
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.backup-info {
+    flex: 1;
+}
+
+.backup-fecha {
+    color: var(--text-primary);
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.backup-detalles {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.btn-restaurar-backup {
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.3s ease;
+}
+
+.btn-restaurar-backup:hover {
+    background: var(--accent-hover);
+}
+

@@ -176,6 +176,7 @@ async function handleLogin(e) {
         
         // Login exitoso
         localStorage.setItem('sessionActive', 'true');
+        localStorage.setItem('currentUsername', username); // Guardar username para operaciones críticas
         // Verificar cambio de fecha al iniciar sesión
         verificarCambioFecha();
         showMainScreen();
@@ -294,6 +295,7 @@ async function navigateToPage(page) {
         'nominas': 'pages/nominas.html',
         'tasas': 'pages/tasas.html',
         'reportes': 'pages/reportes.html',
+        'ajustes': 'pages/ajustes.html',
         'citas': 'pages/citas.html'
     };
     
@@ -362,6 +364,9 @@ function initPageModule(page) {
         } else if (page === 'tasas' && typeof window.initTasas === 'function') {
             console.log('Inicializando tasas...');
             window.initTasas();
+        } else if (page === 'ajustes' && typeof window.initAjustes === 'function') {
+            console.log('Inicializando ajustes...');
+            window.initAjustes();
         } else if (page === 'dashboard' && typeof window.initDashboard === 'function') {
             console.log('Inicializando dashboard...');
             window.initDashboard();
@@ -375,6 +380,7 @@ function initPageModule(page) {
 function getPageTitle(page) {
     const titles = {
         'dashboard': 'Dashboard',
+        'ajustes': 'Ajustes',
         'clientes': 'Gestión de Clientes',
         'productos': 'Gestión de Productos',
         'servicios': 'Gestión de Servicios',

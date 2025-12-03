@@ -535,7 +535,18 @@
                     COALESCE(t.pagado_dolares, 0) as transaccion_pagado_dolares,
                     COALESCE(t.total_en_bs, 0) as transaccion_total_bs,
                     COALESCE(t.total_en_dolares, 0) as transaccion_total_dolares,
-                    t.estado as transaccion_estado
+                    t.estado as transaccion_estado,
+                    -- Calcular el total de servicios y productos de la transacción (SIN propinas)
+                    -- Esto es importante para calcular correctamente la proporción en pagos mixtos
+                    (SELECT COALESCE(SUM(sr2.precio_cobrado), 0) 
+                     FROM ServiciosRealizados sr2 
+                     WHERE sr2.id_transaccion = t.id 
+                     AND sr2.id_servicio IS NOT NULL 
+                     AND sr2.id_servicio != 0
+                     AND sr2.estado = 'completado') as total_servicios_transaccion_bs,
+                    (SELECT COALESCE(SUM(pv.precio_total), 0) 
+                     FROM ProductosVendidos pv 
+                     WHERE pv.id_transaccion = t.id) as total_productos_transaccion_bs
                 FROM ServiciosRealizados sr
                 LEFT JOIN Servicios s ON sr.id_servicio = s.id
                 JOIN Transacciones t ON sr.id_transaccion = t.id
@@ -708,8 +719,11 @@
             mostrarResumenServicios(serviciosPendientes);
             mostrarResumenConsumos(consumos);
 
+            // Actualizar porcentaje del empleado
+            await actualizarPorcentajeEmpleado();
+            
             // Calcular totales (usar serviciosPendientes, no servicios)
-            calcularTotales(serviciosPendientes, consumos, fechaFormato);
+            await calcularTotales(serviciosPendientes, consumos, fechaFormato);
         } catch (error) {
             console.error('Error al calcular nómina:', error);
             mostrarError('Error al calcular la nómina: ' + (error.message || error));
@@ -756,6 +770,31 @@
         resumen.innerHTML = consumos.map(c => {
             return `<p><strong>${c.nombre_producto}</strong> - Cantidad: ${c.cantidad} - Total: ${parseFloat(c.precio_total).toFixed(2)} Bs</p>`;
         }).join('');
+    }
+
+    // Actualizar porcentaje del empleado en la interfaz
+    async function actualizarPorcentajeEmpleado() {
+        const empleadoSelect = document.getElementById('nomina-empleado');
+        const porcentajeInput = document.getElementById('nomina-porcentaje');
+        const porcentajeValor = document.getElementById('nomina-porcentaje-valor');
+        
+        if (!empleadoSelect || !porcentajeInput || !porcentajeValor) return;
+        
+        const idEmpleado = parseInt(empleadoSelect.value);
+        if (!idEmpleado) {
+            porcentajeInput.value = '60';
+            porcentajeValor.textContent = '60';
+            return;
+        }
+        
+        // Obtener porcentaje personalizado del empleado
+        let porcentaje = 60; // Por defecto
+        if (window.obtenerPorcentajeComision) {
+            porcentaje = await window.obtenerPorcentajeComision(idEmpleado);
+        }
+        
+        porcentajeInput.value = porcentaje.toString();
+        porcentajeValor.textContent = porcentaje.toString();
     }
 
     // Calcular totales
@@ -818,8 +857,8 @@
                         comisionesDolares += precioServicioBs / tasaHoy.tasa_bs_por_dolar;
                     }
                 } else if (sePagoMixto) {
-                    // Si se pagó mixto, calcular proporcionalmente basándose en lo que realmente se pagó
-                    const tasa = tasaHoy?.tasa_bs_por_dolar || 1;
+                    // Si se pagó mixto, la comisión es directamente proporcional a lo que se pagó en cada moneda
+                    // La comisión del empleado es el porcentaje de lo que se pagó en cada moneda, NO del precio del servicio
                     
                     // Usar los valores pagados si la transacción está cerrada, sino usar los totales
                     let pagadoBsParaProporcion = transaccionPagadoBs;
@@ -831,25 +870,50 @@
                         pagadoDolaresParaProporcion = transaccionTotalDolares;
                     }
                     
-                    const totalEquivalenteBs = pagadoBsParaProporcion + (pagadoDolaresParaProporcion * tasa);
+                    // IMPORTANTE: El total de la transacción (transaccionTotalBs) incluye propinas en dólares convertidas a bolívares
+                    // Para calcular correctamente la proporción, debemos usar SOLO el total de servicios y productos (SIN propinas)
+                    // Esto asegura que la proporción se calcule correctamente
                     
-                    if (totalEquivalenteBs > 0) {
-                        const proporcionBs = pagadoBsParaProporcion / totalEquivalenteBs;
-                        const proporcionDolares = (pagadoDolaresParaProporcion * tasa) / totalEquivalenteBs;
-                        
-                        // Comisión en bolívares (proporción de Bs)
-                        comisionesBs += precioServicioBs * proporcionBs;
-                        
-                        // Comisión en dólares (proporción de dólares)
-                        if (servicioReferenciaDolares > 0) {
-                            comisionesDolares += servicioReferenciaDolares * proporcionDolares;
-                        } else if (tasaHoy && tasaHoy.tasa_bs_por_dolar) {
-                            comisionesDolares += (precioServicioBs / tasaHoy.tasa_bs_por_dolar) * proporcionDolares;
-                        }
-                    } else {
-                        // Si no hay total, asignar todo a bolívares por defecto
-                        comisionesBs += precioServicioBs;
-                    }
+                    // Obtener el total de servicios y productos de la transacción (sin propinas)
+                    // Esto incluye TODOS los servicios y productos de la transacción, no solo los de este empleado
+                    // porque necesitamos calcular qué proporción del pago total le corresponde a este servicio específico
+                    const totalServiciosTransaccionBs = parseFloat(servicio.total_servicios_transaccion_bs || 0);
+                    const totalProductosTransaccionBs = parseFloat(servicio.total_productos_transaccion_bs || 0);
+                    const totalServiciosYProductosBs = totalServiciosTransaccionBs + totalProductosTransaccionBs;
+                    
+                    // Calcular qué parte del total de servicios y productos representa este servicio
+                    // Ejemplo: Si hay 2 servicios (3750 Bs y 750 Bs), total = 4500 Bs
+                    // - Servicio 1 (3750): proporción = 3750/4500 = 0.8333
+                    // - Servicio 2 (750): proporción = 750/4500 = 0.1667
+                    const proporcionServicioEnTransaccion = totalServiciosYProductosBs > 0 
+                        ? precioServicioBs / totalServiciosYProductosBs 
+                        : 1;
+                    
+                    // Distribuir el pago proporcionalmente según el precio del servicio
+                    // Ejemplo: Si se pagó 2500 Bs + 10$ en una transacción con servicios totales de 4500 Bs:
+                    // - Servicio 1 (3750 Bs, proporción 0.8333): parte en Bs = 2500 * 0.8333 = 2083.33 Bs, parte en $ = 10 * 0.8333 = 8.33$
+                    // - Servicio 2 (750 Bs, proporción 0.1667): parte en Bs = 2500 * 0.1667 = 416.67 Bs, parte en $ = 10 * 0.1667 = 1.67$
+                    const partePagadaBs = pagadoBsParaProporcion * proporcionServicioEnTransaccion;
+                    const partePagadaDolares = pagadoDolaresParaProporcion * proporcionServicioEnTransaccion;
+                    
+                    // La comisión es directamente la parte pagada en cada moneda para este servicio
+                    // El porcentaje de comisión (60%, etc.) se aplicará después en el cálculo de la nómina
+                    // Ejemplo: Si al servicio 1 le corresponde 2083.33 Bs + 8.33$:
+                    // - Comisión en Bs: 2083.33 Bs (el porcentaje se aplica después: 2083.33 * 0.6 = 1250 Bs)
+                    // - Comisión en $: 8.33$ (el porcentaje se aplica después: 8.33 * 0.6 = 5$)
+                    comisionesBs += partePagadaBs;
+                    comisionesDolares += partePagadaDolares;
+                    
+                    // Debug: Log para verificar el cálculo de proporción y distribución
+                    console.log(`[Nómina] Empleado ${servicio.id_empleado || 'N/A'}, Servicio ${servicio.id_servicio || 'N/A'}:`, {
+                        precioServicioBs: precioServicioBs.toFixed(2),
+                        totalServiciosYProductosBs: totalServiciosYProductosBs.toFixed(2),
+                        proporcionServicioEnTransaccion: proporcionServicioEnTransaccion.toFixed(4),
+                        pagadoBsParaProporcion: pagadoBsParaProporcion.toFixed(2),
+                        pagadoDolaresParaProporcion: pagadoDolaresParaProporcion.toFixed(2),
+                        partePagadaBs: partePagadaBs.toFixed(2),
+                        partePagadaDolares: partePagadaDolares.toFixed(2)
+                    });
                 } else {
                     // Si no hay información de pago, asignar a bolívares por defecto
                     comisionesBs += precioServicioBs;
@@ -908,17 +972,18 @@
         document.getElementById('nomina-descuentos').value = descuentosBs.toFixed(2);
         document.getElementById('nomina-subtotal').value = subtotal.toFixed(2);
         
-        // Aplicar porcentaje fijo de 60% al total
-        recalcularTotalConPorcentaje();
+        // Aplicar porcentaje personalizado del empleado al total
+        await recalcularTotalConPorcentaje();
     }
 
-    // Recalcular total aplicando el porcentaje fijo de 60%
-    function recalcularTotalConPorcentaje() {
+    // Recalcular total aplicando el porcentaje personalizado del empleado
+    async function recalcularTotalConPorcentaje() {
         const subtotalInput = document.getElementById('nomina-subtotal');
         const propinasBsInput = document.getElementById('nomina-propinas-bs');
         const propinasDolaresInput = document.getElementById('nomina-propinas-dolares');
         const totalInput = document.getElementById('nomina-total');
         const totalDolaresInput = document.getElementById('nomina-total-dolares');
+        const empleadoSelect = document.getElementById('nomina-empleado');
         
         if (!subtotalInput || !totalInput) return;
         
@@ -926,10 +991,16 @@
         const propinasBs = parseFloat(propinasBsInput ? propinasBsInput.value.replace(/[^\d.]/g, '') : 0) || 0;
         const propinasDolares = parseFloat(propinasDolaresInput ? propinasDolaresInput.value.replace(/[^\d.]/g, '') : 0) || 0;
         
-        // Porcentaje fijo de 60%
-        const porcentaje = 60;
+        // Obtener porcentaje personalizado del empleado (por defecto 60%)
+        let porcentaje = 60;
+        if (empleadoSelect && empleadoSelect.value) {
+            const idEmpleado = parseInt(empleadoSelect.value);
+            if (idEmpleado && window.obtenerPorcentajeComision) {
+                porcentaje = await window.obtenerPorcentajeComision(idEmpleado);
+            }
+        }
         
-        // Calcular total en bolívares: (subtotal * 0.60) + propinas en Bs (las propinas NO se descuentan)
+        // Calcular total en bolívares: (subtotal * porcentaje) + propinas en Bs (las propinas NO se descuentan)
         // El total en Bs es independiente y solo incluye propinas en Bs
         const totalPagadoBs = (subtotal * (porcentaje / 100)) + propinasBs;
         totalInput.value = totalPagadoBs.toFixed(2);
@@ -941,6 +1012,16 @@
         const totalPagadoDolares = (comisionesDolares * (porcentaje / 100)) + propinasDolares;
         if (totalDolaresInput) {
             totalDolaresInput.value = totalPagadoDolares.toFixed(2);
+        }
+        
+        // Actualizar el display del porcentaje si existe
+        const porcentajeInput = document.getElementById('nomina-porcentaje');
+        const porcentajeValor = document.getElementById('nomina-porcentaje-valor');
+        if (porcentajeInput) {
+            porcentajeInput.value = porcentaje.toString();
+        }
+        if (porcentajeValor) {
+            porcentajeValor.textContent = porcentaje.toString();
         }
     }
 
@@ -1063,6 +1144,16 @@
             return;
         }
 
+        // Verificar contraseña para operación crítica
+        try {
+            if (window.verificarContraseñaOperacionCritica) {
+                await window.verificarContraseñaOperacionCritica();
+            }
+        } catch (error) {
+            // Si el usuario cancela o la contraseña es incorrecta, no continuar
+            return;
+        }
+
         // Convertir fecha de YYYY-MM-DD a DD/MM/YYYY
         const [year, month, day] = fechaInput.split('-');
         const fechaFormato = `${day}/${month}/${year}`;
@@ -1073,7 +1164,11 @@
         const propinasDolares = parseFloat(document.getElementById('nomina-propinas-dolares').value) || 0;
         const propinasBs = parseFloat(document.getElementById('nomina-propinas-bs').value) || 0;
         const descuentosBs = parseFloat(document.getElementById('nomina-descuentos').value) || 0;
-        const porcentaje = 60; // Siempre 60% fijo
+        // Obtener porcentaje personalizado del empleado (por defecto 60%)
+        let porcentaje = 60;
+        if (idEmpleado && window.obtenerPorcentajeComision) {
+            porcentaje = await window.obtenerPorcentajeComision(idEmpleado);
+        }
         const totalPagadoBs = parseFloat(document.getElementById('nomina-total').value) || 0;
         const totalPagadoDolares = parseFloat(document.getElementById('nomina-total-dolares').value) || 0;
         const monedaPago = document.getElementById('nomina-moneda-pago').value || 'bs';

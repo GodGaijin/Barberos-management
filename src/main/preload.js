@@ -42,6 +42,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Tutoriales
   tutorialGetProgress: (tutorialId) => ipcRenderer.invoke('tutorial-get-progress', tutorialId),
   tutorialSaveProgress: (tutorialId, etapa, completado, datosAdicionales) => ipcRenderer.invoke('tutorial-save-progress', tutorialId, etapa, completado, datosAdicionales),
-  tutorialGetAllProgress: () => ipcRenderer.invoke('tutorial-get-all-progress')
+  tutorialGetAllProgress: () => ipcRenderer.invoke('tutorial-get-all-progress'),
+  // Respaldo y configuración
+  crearBackup: (nombre) => ipcRenderer.invoke('crear-backup', nombre),
+  restaurarBackup: (ruta) => ipcRenderer.invoke('restaurar-backup', ruta),
+  formatearBaseDatos: () => ipcRenderer.invoke('formatear-base-datos'),
+  listarBackupsFisicos: () => ipcRenderer.invoke('listar-backups-fisicos'),
+  // Eventos
+  onBackupError: (callback) => {
+    ipcRenderer.on('backup-error', (event, data) => callback(data));
+  },
+  onGenerarReporteAutomatico: (callback) => {
+    ipcRenderer.on('generar-reporte-automatico', (event, fechaFormato) => callback(fechaFormato));
+  },
+  // Reprogramar
+  reprogramarRespaldos: () => ipcRenderer.send('reprogramar-respaldos'),
+  reprogramarReportes: () => ipcRenderer.send('reprogramar-reportes')
 });
 

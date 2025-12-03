@@ -312,7 +312,13 @@
             
             if (!precioDolaresInput || !precioBsInput) return;
             
-            const precioDolares = obtenerValorNumerico ? obtenerValorNumerico(precioDolaresInput) : parseFloat(precioDolaresInput.value) || 0;
+            // Obtener valor numérico del precio en dólares (manejar inputs formateados)
+            let precioDolares = 0;
+            if (typeof window.obtenerValorNumerico === 'function' && precioDolaresInput._formateadoPrecio) {
+                precioDolares = window.obtenerValorNumerico(precioDolaresInput) || 0;
+            } else {
+                precioDolares = parseFloat(precioDolaresInput.value.replace(/[^\d.]/g, '')) || 0;
+            }
             
             if (precioDolares > 0) {
                 // Obtener tasa del día actual
@@ -384,10 +390,6 @@
             // Llenar los campos con los valores
             nombreInput.value = servicio.nombre;
             descripcionInput.value = servicio.descripcion || '';
-            // Formatear precio en dólares a 2 decimales
-            precioDolaresInput.value = typeof formatearDecimales === 'function' 
-                ? formatearDecimales(servicio.referencia_en_dolares) 
-                : parseFloat(servicio.referencia_en_dolares).toFixed(2);
             
             // Asegurar que los campos sean completamente interactivos ANTES de aplicar formateo
             nombreInput.style.pointerEvents = 'auto';
@@ -403,9 +405,23 @@
                 await calcularPrecioBs();
             };
             
-            // Re-aplicar formateo a los inputs
+            // Establecer el valor ANTES de aplicar el formateo
+            // Convertir el valor a centavos (formato que espera formatearInputPrecio)
+            const precioDolares = parseFloat(servicio.referencia_en_dolares) || 0;
+            const precioEnCentavos = Math.round(precioDolares * 100);
+            // Establecer como string de dígitos (sin punto) para que el handler lo formatee
+            precioDolaresInput.value = String(precioEnCentavos);
+            
+            // Re-aplicar formateo a los inputs DESPUÉS de establecer el valor
             if (typeof formatearInputPrecio === 'function') {
                 formatearInputPrecio(precioDolaresInput);
+                // Disparar evento input para que el formateo procese el valor
+                precioDolaresInput.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+                // Si no hay formateo, usar formato estándar
+                precioDolaresInput.value = typeof formatearDecimales === 'function' 
+                    ? formatearDecimales(precioDolares) 
+                    : precioDolares.toFixed(2);
             }
             
             // Calcular precio en Bs automáticamente
@@ -442,45 +458,41 @@
         const precioDolaresInput = document.getElementById('servicio-precio-dolares');
         const precioBsInput = document.getElementById('servicio-precio-bs');
         
-        const precioDolares = obtenerValorNumerico ? obtenerValorNumerico(precioDolaresInput) : parseFloat(precioDolaresInput.value) || 0;
-        
-        // Calcular precio_bs automáticamente si no está disponible
-        let precioBs = null;
-        if (precioBsInput.value && precioBsInput.value !== 'No disponible' && precioBsInput.value !== '') {
-            precioBs = obtenerValorNumerico ? obtenerValorNumerico(precioBsInput) : parseFloat(precioBsInput.value);
-        } else {
-            // Calcular según la tasa del día
-            const hoy = new Date();
-            const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
-            const tasaHoy = await window.electronAPI.dbGet(
-                'SELECT * FROM TasasCambio WHERE fecha = ?',
-                [fechaHoy]
-            );
-            if (tasaHoy && precioDolares > 0) {
-                precioBs = precioDolares * tasaHoy.tasa_bs_por_dolar;
+        // Obtener valor numérico del precio en dólares (manejar inputs formateados)
+        let precioDolares = 0;
+        if (precioDolaresInput) {
+            if (typeof window.obtenerValorNumerico === 'function' && precioDolaresInput._formateadoPrecio) {
+                precioDolares = window.obtenerValorNumerico(precioDolaresInput) || 0;
+            } else {
+                precioDolares = parseFloat(precioDolaresInput.value.replace(/[^\d.]/g, '')) || 0;
             }
         }
-
+        
         if (!nombre) {
             mostrarError('El nombre es requerido');
             return;
         }
 
         try {
-            // Si precioBs es null, calcularlo según la tasa del día
-            if (precioBs === null || precioBs === undefined) {
+            // SIEMPRE recalcular precio_bs basándose en el precio en dólares actual
+            // El precio en bolívares es un campo calculado automáticamente
+            let precioBs = null;
+            if (precioDolares > 0) {
                 const hoy = new Date();
                 const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
                 const tasaHoy = await window.electronAPI.dbGet(
                     'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
                     [fechaHoy]
                 );
-                if (tasaHoy && precioDolares > 0) {
+                if (tasaHoy && tasaHoy.tasa_bs_por_dolar) {
                     precioBs = precioDolares * tasaHoy.tasa_bs_por_dolar;
                 } else {
                     mostrarError('No hay tasa de cambio establecida para hoy. Por favor, establece la tasa del día primero.');
                     return;
                 }
+            } else {
+                // Si no hay precio en dólares, el precio en bolívares debe ser null
+                precioBs = null;
             }
             
             if (id) {

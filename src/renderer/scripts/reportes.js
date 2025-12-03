@@ -30,6 +30,15 @@
                 setupEventListeners();
                 console.log('Cargando datos...');
                 cargarReportes();
+                
+                // Listener para generación automática de reportes
+                if (window.electronAPI && window.electronAPI.onGenerarReporteAutomatico) {
+                    window.electronAPI.onGenerarReporteAutomatico((fechaFormato) => {
+                        console.log('📊 Generando reporte automático para:', fechaFormato);
+                        generarReporteParaFecha(fechaFormato);
+                    });
+                }
+                
                 window.reportesModule.initialized = true;
                 console.log('Reportes inicializados correctamente');
             } catch (error) {
@@ -41,6 +50,45 @@
             }
         }, 150);
     };
+    
+    // Generar reporte para una fecha específica (para reportes automáticos)
+    async function generarReporteParaFecha(fechaFormato) {
+        try {
+            // Convertir fecha de DD/MM/YYYY a YYYY-MM-DD para el input
+            const [day, month, year] = fechaFormato.split('/');
+            const fechaInput = `${year}-${month}-${day}`;
+            
+            // Verificar si ya existe un reporte para esta fecha
+            const reporteExistente = await window.electronAPI.dbGet(
+                'SELECT * FROM ReportesDiarios WHERE fecha_reporte = ?',
+                [fechaFormato]
+            );
+
+            if (reporteExistente) {
+                console.log(`ℹ️ Ya existe un reporte para ${fechaFormato}`);
+                return;
+            }
+
+            // Establecer la fecha en el input si existe
+            const fechaInputElement = document.getElementById('reporte-fecha');
+            if (fechaInputElement) {
+                fechaInputElement.value = fechaInput;
+            }
+
+            // Llamar a generarReporte pero saltando la verificación de contraseña
+            // Usando una variable de contexto
+            window._generarReporteSinContraseña = true;
+            try {
+                await generarReporte();
+            } finally {
+                window._generarReporteSinContraseña = false;
+            }
+            
+            console.log(`✅ Reporte automático generado para ${fechaFormato}`);
+        } catch (error) {
+            console.error('Error al generar reporte automático:', error);
+        }
+    }
 
     // Event Listeners
     function setupEventListeners() {
@@ -300,6 +348,18 @@
             return;
         }
 
+        // Verificar contraseña para operación crítica (saltar si es reporte automático)
+        if (!window._generarReporteSinContraseña) {
+            try {
+                if (window.verificarContraseñaOperacionCritica) {
+                    await window.verificarContraseñaOperacionCritica();
+                }
+            } catch (error) {
+                // Si el usuario cancela o la contraseña es incorrecta, no continuar
+                return;
+            }
+        }
+
         // Convertir fecha de YYYY-MM-DD a DD/MM/YYYY
         const [year, month, day] = fechaInput.split('-');
         const fechaFormato = `${day}/${month}/${year}`;
@@ -435,7 +495,8 @@
             const totalTransacciones = transacciones.length;
             
             // Calcular ingresos SIN propinas
-            // Necesitamos calcular servicios y productos por separado según cómo se pagaron
+            // IMPORTANTE: Para transacciones cerradas, calcular la proporción de servicios vs productos
+            // y distribuir el pago (pagado_bs y pagado_dolares) según esa proporción
             let totalIngresosBs = 0;
             let totalIngresosDolares = 0;
             
@@ -449,86 +510,118 @@
                 totalPropinasDolares += parseFloat(s.propina_en_dolares || 0);
             });
             
-            // Calcular ingresos de servicios según cómo se pagaron
-            servicios.forEach(s => {
-                const esPropinaIndependiente = !s.id_servicio || s.id_servicio === 0;
-                
-                if (!esPropinaIndependiente) {
-                    // Es un servicio real
-                    const precioServicioBs = parseFloat(s.precio_cobrado || 0);
-                    const precioServicioDolares = parseFloat(s.servicio_referencia_dolares || 0);
-                    const pagadoBs = parseFloat(s.pagado_bs || 0);
-                    const pagadoDolares = parseFloat(s.pagado_dolares || 0);
-                    const transaccionEstado = s.transaccion_estado || 'cerrada';
+            // Agrupar transacciones para evitar duplicados
+            const transaccionesProcesadas = new Set();
+            
+            // Para transacciones cerradas, calcular ingresos basados en lo que se pagó
+            transacciones.forEach(t => {
+                if (t.estado === 'cerrada' && !transaccionesProcesadas.has(t.id)) {
+                    const pagadoBs = parseFloat(t.pagado_bs || 0);
+                    const pagadoDolares = parseFloat(t.pagado_dolares || 0);
                     
-                    // Determinar cómo se pagó el servicio
-                    let sePagoSoloEnBs = false;
-                    let sePagoSoloEnDolares = false;
-                    let sePagoMixto = false;
+                    // Obtener total de servicios y productos de la transacción (sin propinas)
+                    const totalServiciosTransaccionBs = servicios
+                        .filter(s => s.id_transaccion === t.id && s.id_servicio && s.id_servicio !== 0)
+                        .reduce((sum, s) => sum + parseFloat(s.precio_cobrado || 0), 0);
                     
-                    if (transaccionEstado === 'cerrada') {
-                        sePagoSoloEnBs = pagadoBs > 0 && pagadoDolares === 0;
-                        sePagoSoloEnDolares = pagadoDolares > 0 && pagadoBs === 0;
-                        sePagoMixto = pagadoBs > 0 && pagadoDolares > 0;
+                    const totalProductosTransaccionBs = productos
+                        .filter(p => p.id_transaccion === t.id)
+                        .reduce((sum, p) => sum + parseFloat(p.precio_total || 0), 0);
+                    
+                    const totalServiciosYProductosBs = totalServiciosTransaccionBs + totalProductosTransaccionBs;
+                    
+                    if (totalServiciosYProductosBs > 0) {
+                        // Calcular proporción de servicios vs productos
+                        const proporcionServicios = totalServiciosTransaccionBs / totalServiciosYProductosBs;
+                        const proporcionProductos = totalProductosTransaccionBs / totalServiciosYProductosBs;
+                        
+                        // Distribuir el pago según la proporción de servicios/productos
+                        if (pagadoBs > 0 && pagadoDolares > 0) {
+                            // Pago mixto: distribuir proporcionalmente
+                            // La parte de servicios se distribuye entre Bs y $ según lo que se pagó
+                            // Ejemplo: Si se pagó 2500 Bs + 10$ y servicios son 83.33% del total:
+                            // - Servicios en Bs: 2500 * 0.8333 = 2083.33 Bs
+                            // - Servicios en $: 10 * 0.8333 = 8.33$
+                            // - Productos en Bs: 2500 * 0.1667 = 416.67 Bs
+                            // NOTA: proporcionServicios + proporcionProductos = 1, así que:
+                            // totalIngresosBs = pagadoBs * (proporcionServicios + proporcionProductos) = pagadoBs
+                            totalIngresosBs += pagadoBs; // Equivale a (pagadoBs * proporcionServicios) + (pagadoBs * proporcionProductos)
+                            totalIngresosDolares += (pagadoDolares * proporcionServicios);
+                            
+                            // Debug: Log para verificar el cálculo
+                            console.log(`[Reporte] Transacción ${t.id}:`, {
+                                pagadoBs: pagadoBs.toFixed(2),
+                                pagadoDolares: pagadoDolares.toFixed(2),
+                                totalServiciosTransaccionBs: totalServiciosTransaccionBs.toFixed(2),
+                                totalProductosTransaccionBs: totalProductosTransaccionBs.toFixed(2),
+                                proporcionServicios: proporcionServicios.toFixed(4),
+                                proporcionProductos: proporcionProductos.toFixed(4),
+                                ingresosBsCalculados: pagadoBs.toFixed(2),
+                                ingresosDolaresCalculados: (pagadoDolares * proporcionServicios).toFixed(2)
+                            });
+                        } else if (pagadoBs > 0) {
+                            // Solo bolívares: servicios y productos van a bolívares
+                            totalIngresosBs += pagadoBs;
+                        } else if (pagadoDolares > 0) {
+                            // Solo dólares: solo servicios van a dólares, productos se convierten a Bs
+                            const tasaValor = tasa ? parseFloat(tasa.tasa_bs_por_dolar) : 1;
+                            totalIngresosDolares += (pagadoDolares * proporcionServicios);
+                            // Productos: convertir a bolívares
+                            totalIngresosBs += (pagadoDolares * proporcionProductos * tasaValor);
+                        }
                     } else {
-                        // Si la transacción está abierta, usar totales como referencia
-                        const totalBs = parseFloat(s.transaccion_total_bs || 0);
-                        const totalDolares = parseFloat(s.transaccion_total_dolares || 0);
-                        sePagoSoloEnBs = totalBs > 0 && totalDolares === 0;
-                        sePagoSoloEnDolares = totalDolares > 0 && totalBs === 0;
-                        sePagoMixto = totalBs > 0 && totalDolares > 0;
+                        // Si no hay servicios ni productos, asignar todo a bolívares por defecto
+                        totalIngresosBs += pagadoBs;
                     }
                     
-                    if (sePagoSoloEnBs) {
-                        // Servicio pagado solo en bolívares
+                    transaccionesProcesadas.add(t.id);
+                }
+            });
+            
+            // Para transacciones abiertas o servicios sin transacción cerrada, calcular proporcionalmente
+            servicios.forEach(s => {
+                const esPropinaIndependiente = !s.id_servicio || s.id_servicio === 0;
+                const transaccionEstado = s.transaccion_estado || 'cerrada';
+                
+                // Solo procesar si la transacción no está cerrada o no fue procesada
+                if (!esPropinaIndependiente && transaccionEstado !== 'cerrada' && !transaccionesProcesadas.has(s.id_transaccion)) {
+                    const precioServicioBs = parseFloat(s.precio_cobrado || 0);
+                    const precioServicioDolares = parseFloat(s.servicio_referencia_dolares || 0);
+                    const totalBs = parseFloat(s.transaccion_total_bs || 0);
+                    const totalDolares = parseFloat(s.transaccion_total_dolares || 0);
+                    
+                    if (totalBs > 0 && totalDolares === 0) {
+                        // Solo bolívares
                         totalIngresosBs += precioServicioBs;
-                    } else if (sePagoSoloEnDolares) {
-                        // Servicio pagado solo en dólares
+                    } else if (totalDolares > 0 && totalBs === 0) {
+                        // Solo dólares
                         if (precioServicioDolares > 0) {
                             totalIngresosDolares += precioServicioDolares;
                         }
-                    } else if (sePagoMixto) {
-                        // Servicio pagado mixto - calcular proporcionalmente
-                        const totalTransaccionBs = parseFloat(s.transaccion_total_bs || 0);
-                        const totalTransaccionDolares = parseFloat(s.transaccion_total_dolares || 0);
-                        const pagadoBsTransaccion = parseFloat(s.pagado_bs || 0);
-                        const pagadoDolaresTransaccion = parseFloat(s.pagado_dolares || 0);
-                        
-                        // Usar valores pagados si la transacción está cerrada
-                        let pagadoBsParaProporcion = transaccionEstado === 'cerrada' ? pagadoBsTransaccion : totalTransaccionBs;
-                        let pagadoDolaresParaProporcion = transaccionEstado === 'cerrada' ? pagadoDolaresTransaccion : totalTransaccionDolares;
-                        
-                        if (pagadoBsParaProporcion > 0 || pagadoDolaresParaProporcion > 0) {
-                            // Obtener tasa del día para calcular proporción
-                            const tasaValor = tasa ? parseFloat(tasa.tasa_bs_por_dolar) : 1;
-                            const totalEquivalenteBs = pagadoBsParaProporcion + (pagadoDolaresParaProporcion * tasaValor);
-                            
-                            if (totalEquivalenteBs > 0) {
-                                const proporcionBs = pagadoBsParaProporcion / totalEquivalenteBs;
-                                const proporcionDolares = (pagadoDolaresParaProporcion * tasaValor) / totalEquivalenteBs;
-                                
-                                totalIngresosBs += precioServicioBs * proporcionBs;
-                                if (precioServicioDolares > 0) {
-                                    totalIngresosDolares += precioServicioDolares * proporcionDolares;
-                                }
-                            } else {
-                                // Si no hay total, asignar todo a bolívares por defecto
-                                totalIngresosBs += precioServicioBs;
+                    } else if (totalBs > 0 && totalDolares > 0) {
+                        // Mixto: calcular proporción
+                        const tasaValor = tasa ? parseFloat(tasa.tasa_bs_por_dolar) : 1;
+                        const totalEquivalenteBs = totalBs + (totalDolares * tasaValor);
+                        if (totalEquivalenteBs > 0) {
+                            const proporcionBs = totalBs / totalEquivalenteBs;
+                            const proporcionDolares = (totalDolares * tasaValor) / totalEquivalenteBs;
+                            totalIngresosBs += precioServicioBs * proporcionBs;
+                            if (precioServicioDolares > 0) {
+                                totalIngresosDolares += precioServicioDolares * proporcionDolares;
                             }
-                        } else {
-                            // Si no hay información de pago, asignar a bolívares por defecto
-                            totalIngresosBs += precioServicioBs;
                         }
                     } else {
-                        // Si no hay información de cómo se pagó, asignar a bolívares por defecto
+                        // Sin información, asignar a bolívares
                         totalIngresosBs += precioServicioBs;
                     }
                 }
             });
             
-            // Sumar productos vendidos (siempre en bolívares)
+            // Sumar productos vendidos de transacciones abiertas (siempre en bolívares)
             productos.forEach(p => {
-                totalIngresosBs += parseFloat(p.precio_total || 0);
+                if (!transaccionesProcesadas.has(p.id_transaccion)) {
+                    totalIngresosBs += parseFloat(p.precio_total || 0);
+                }
             });
             
             // Calcular balance/neto (Ingresos - Nóminas)

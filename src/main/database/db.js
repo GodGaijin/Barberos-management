@@ -37,6 +37,9 @@ class DB {
       this.migrateServiciosRealizados();
       // Migrar tabla de tutoriales
       this.migrateTutoriales();
+      // Migrar tablas de respaldo y configuración
+      this.migrateBackups();
+      this.migrateConfiguracion();
     }
     
     // Habilitar foreign keys
@@ -748,6 +751,58 @@ class DB {
       }
     } catch (error) {
       console.error('Error al migrar tabla TutorialesProgreso:', error);
+    }
+  }
+
+  migrateBackups() {
+    try {
+      const tableExists = this.db.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='Backups'
+      `).get();
+
+      if (!tableExists) {
+        console.log('Creando tabla Backups...');
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS Backups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre_archivo TEXT NOT NULL,
+            ruta_completa TEXT NOT NULL,
+            fecha_creacion TEXT NOT NULL,
+            tamano_bytes INTEGER NOT NULL,
+            descripcion TEXT
+          )
+        `);
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_backups_fecha ON Backups(fecha_creacion DESC);');
+        console.log('Tabla Backups creada exitosamente');
+      }
+    } catch (error) {
+      console.error('Error al migrar tabla Backups:', error);
+    }
+  }
+
+  migrateConfiguracion() {
+    try {
+      const tableExists = this.db.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='Configuracion'
+      `).get();
+
+      if (!tableExists) {
+        console.log('Creando tabla Configuracion...');
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS Configuracion (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            clave TEXT NOT NULL UNIQUE,
+            valor TEXT,
+            fecha_actualizacion TEXT DEFAULT (datetime('now', 'localtime'))
+          )
+        `);
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_configuracion_clave ON Configuracion(clave);');
+        console.log('Tabla Configuracion creada exitosamente');
+      }
+    } catch (error) {
+      console.error('Error al migrar tabla Configuracion:', error);
     }
   }
 

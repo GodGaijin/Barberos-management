@@ -395,13 +395,31 @@
     async function verificarTutorialPendiente(pageId) {
         if (!tutoriales[pageId]) return;
         
+        // Verificar si los tutoriales están activados en la configuración
+        try {
+            const configTutoriales = await window.electronAPI.dbGet(
+                'SELECT valor FROM Configuracion WHERE clave = ?',
+                ['tutoriales_activos']
+            );
+            
+            // Si la configuración existe y está en 'false', no mostrar tutoriales
+            if (configTutoriales && configTutoriales.valor === 'false') {
+                return; // Tutoriales desactivados, no mostrar
+            }
+        } catch (error) {
+            // Si hay error al leer la configuración, continuar (por defecto activados)
+            console.warn('No se pudo verificar configuración de tutoriales:', error);
+        }
+        
         try {
             const result = await window.electronAPI.tutorialGetProgress(tutoriales[pageId].id);
             if (result.success && result.progress) {
-                // Si está completado, no mostrar
-                if (result.progress.completado) return;
+                // Si está completado (ya sea visto completamente o saltado), no mostrar de nuevo
+                if (result.progress.completado) {
+                    return; // No mostrar tutorial si ya fue completado o saltado
+                }
                 
-                // Si hay progreso guardado, continuar desde ahí
+                // Si hay progreso guardado pero no está completado, continuar desde ahí
                 if (result.progress.etapa_actual > 0) {
                     iniciarTutorial(pageId, result.progress.etapa_actual);
                 } else {
@@ -432,14 +450,17 @@
                     if (confirmado) {
                         iniciarTutorial(pageId, 0);
                     } else {
-                        // Marcar como visto pero no completado (opcional)
-                        guardarProgresoTutorial(pageId, 0, false);
+                        // Marcar como saltado (completado = true pero etapa = 0 indica que fue rechazado/saltado)
+                        guardarProgresoTutorial(pageId, 0, true);
                     }
                 });
             } else {
                 // Fallback
                 if (confirm(`¿Te gustaría ver un tutorial sobre "${tutorial.nombre}"?`)) {
                     iniciarTutorial(pageId, 0);
+                } else {
+                    // Marcar como saltado si el usuario rechaza
+                    guardarProgresoTutorial(pageId, 0, true);
                 }
             }
         }, 1000);
@@ -720,7 +741,8 @@
     window.saltarTutorial = function() {
         if (!currentTutorial) return;
         
-        // Marcar como completado pero sin ver todas las etapas
+        // Marcar como completado (saltado) - usar etapa final para indicar que fue saltado intencionalmente
+        // Esto evita que se muestre de nuevo
         guardarProgresoTutorial(currentTutorial.id, currentTutorial.etapas.length - 1, true);
         cerrarTutorial();
     };

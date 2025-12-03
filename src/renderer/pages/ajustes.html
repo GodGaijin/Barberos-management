@@ -1,0 +1,206 @@
+<div class="page-header">
+    <h2>Ajustes del Sistema</h2>
+    <button id="btn-abrir-ajustes" class="btn btn-primary">⚙️ Configurar Ajustes</button>
+</div>
+
+<div class="page-content">
+    <div class="info-box">
+        <h3>Configuración del Sistema</h3>
+        <p>Desde aquí puedes ajustar los porcentajes de comisión para cada empleado en las nóminas.</p>
+        <p>Haz clic en "Configurar Ajustes" para abrir el panel de configuración.</p>
+    </div>
+</div>
+
+<!-- Modal de Ajustes -->
+<div id="ajustes-modal" class="modal" style="display: none;">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3>Ajustes del Sistema</h3>
+            <button class="modal-close" id="close-ajustes-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Tabs -->
+            <div class="tabs-container">
+                <div class="tabs">
+                    <button class="tab-button active" data-tab="porcentajes-nomina">Porcentajes de Nómina</button>
+                    <button class="tab-button" data-tab="seguridad">Seguridad</button>
+                    <button class="tab-button" data-tab="apariencia">Apariencia</button>
+                    <button class="tab-button" data-tab="respaldo">Respaldo</button>
+                    <button class="tab-button" data-tab="reportes">Reportes</button>
+                </div>
+                
+                <!-- Tab: Porcentajes de Nómina -->
+                <div class="tab-content active" id="tab-porcentajes-nomina">
+                    <div class="form-section">
+                        <h4>Configurar Porcentaje de Comisión por Empleado</h4>
+                        <p class="form-description">
+                            Ajusta el porcentaje de comisión que se aplicará a cada empleado al calcular las nóminas.
+                            El porcentaje se aplica sobre las comisiones ganadas (servicios realizados).
+                        </p>
+                        <div id="empleados-porcentajes-container">
+                            <div class="loading">Cargando empleados...</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Seguridad -->
+                <div class="tab-content" id="tab-seguridad">
+                    <div class="form-section">
+                        <h4>Protección con Contraseña</h4>
+                        <p class="form-description">
+                            Las operaciones críticas (cerrar transacciones, generar nóminas, generar reportes del día) 
+                            requerirán la contraseña del usuario actual cada vez que se realicen.
+                        </p>
+                        <div class="info-box" style="background: var(--bg-tertiary); padding: 15px; border-radius: 6px; margin-top: 15px;">
+                            <p style="color: var(--text-secondary); margin: 0;">
+                                <strong>Operaciones protegidas:</strong><br>
+                                • Cerrar transacciones<br>
+                                • Generar nóminas<br>
+                                • Generar reportes del día<br>
+                                • Restaurar backups<br>
+                                • Formatear base de datos
+                            </p>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="proteccion-contraseña" checked disabled>
+                                <span>Protección con contraseña activada (siempre activa)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Apariencia -->
+                <div class="tab-content" id="tab-apariencia">
+                    <div class="form-section">
+                        <h4>Modo Claro/Oscuro</h4>
+                        <p class="form-description">
+                            Cambia entre modo claro y oscuro. Los cambios se aplican inmediatamente y se guardan automáticamente.
+                        </p>
+                        <div style="margin-top: 20px;">
+                            <label class="radio-label" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                                <input type="radio" name="modo-apariencia" id="modo-oscuro" value="oscuro" checked>
+                                <span>Modo Oscuro</span>
+                            </label>
+                            <label class="radio-label" style="display: flex; align-items: center; gap: 10px;">
+                                <input type="radio" name="modo-apariencia" id="modo-claro" value="claro">
+                                <span>Modo Claro</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section" style="margin-top: 40px; border-top: 1px solid var(--border-color); padding-top: 30px;">
+                        <h4>Personalización</h4>
+                        <p class="form-description">
+                            Configura las preferencias de personalización del sistema.
+                        </p>
+                        <div style="margin-top: 20px;">
+                            <label class="checkbox-label" style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="tutoriales-activos">
+                                <span>Activar tutoriales interactivos</span>
+                            </label>
+                            <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block; margin-left: 28px;">
+                                Cuando está activado, el sistema mostrará tutoriales interactivos para ayudarte a aprender a usar las diferentes funcionalidades.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Respaldo -->
+                <div class="tab-content" id="tab-respaldo">
+                    <div class="form-section">
+                        <h4>Respaldo Automático</h4>
+                        <p class="form-description">
+                            Configura el respaldo automático de la base de datos. Los backups se guardan en la carpeta de backups 
+                            de la aplicación y se mantienen los últimos 20 backups.
+                        </p>
+                        <div style="margin-top: 20px;">
+                            <label class="checkbox-label" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                                <input type="checkbox" id="respaldo-automatico-activo">
+                                <span>Activar respaldo automático</span>
+                            </label>
+                            
+                            <div class="form-group" style="margin-top: 20px;">
+                                <label for="frecuencia-respaldo">Frecuencia de Respaldo</label>
+                                <select id="frecuencia-respaldo" class="form-select">
+                                    <option value="cada-hora">Cada hora</option>
+                                    <option value="cada-6-horas">Cada 6 horas</option>
+                                    <option value="diario">Diario</option>
+                                    <option value="semanal">Semanal</option>
+                                </select>
+                            </div>
+                            
+                            <div class="info-box" style="background: var(--bg-tertiary); padding: 15px; border-radius: 6px; margin-top: 20px;">
+                                <p style="color: var(--text-secondary); margin: 0;">
+                                    <strong>Información:</strong><br>
+                                    • Se mantienen los últimos 20 backups<br>
+                                    • Los backups más antiguos se eliminan automáticamente<br>
+                                    • Se notificará si un respaldo falla
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 40px; border-top: 1px solid var(--border-color); padding-top: 30px;">
+                            <h4>Restaurar Backup</h4>
+                            <p class="form-description">
+                                Selecciona un backup para restaurar. Esta operación requiere confirmación y contraseña.
+                            </p>
+                            <div id="backups-lista-container" style="margin-top: 15px;">
+                                <div class="loading">Cargando backups...</div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 40px; border-top: 1px solid var(--border-color); padding-top: 30px;">
+                            <h4 style="color: var(--error-color);">Zona de Peligro</h4>
+                            <p class="form-description" style="color: var(--error-color);">
+                                <strong>Formatear Base de Datos:</strong> Esta acción eliminará todos los datos y creará un backup automático antes de formatear.
+                            </p>
+                            <button type="button" class="btn btn-danger" id="btn-formatear-bd" style="margin-top: 15px;">
+                                Formatear Base de Datos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Reportes -->
+                <div class="tab-content" id="tab-reportes">
+                    <div class="form-section">
+                        <h4>Reportes Automáticos</h4>
+                        <p class="form-description">
+                            Configura la generación automática de reportes diarios. Los reportes se generan siempre, 
+                            incluso si no hay transacciones ese día, y se guardan en la base de datos.
+                        </p>
+                        <div style="margin-top: 20px;">
+                            <label class="checkbox-label" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                                <input type="checkbox" id="reportes-automaticos-activo">
+                                <span>Activar generación automática de reportes</span>
+                            </label>
+                            
+                            <div class="form-group">
+                                <label for="hora-reportes">Hora de Generación</label>
+                                <input type="time" id="hora-reportes" class="form-input" value="23:00">
+                                <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block;">
+                                    Hora en formato 24 horas (HH:MM)
+                                </small>
+                            </div>
+                            
+                            <div class="info-box" style="background: var(--bg-tertiary); padding: 15px; border-radius: 6px; margin-top: 20px;">
+                                <p style="color: var(--text-secondary); margin: 0;">
+                                    <strong>Información:</strong><br>
+                                    • Los reportes se generan todos los días a la hora especificada<br>
+                                    • Se generan incluso si no hay transacciones<br>
+                                    • Los reportes se guardan en la base de datos y pueden visualizarse en el módulo de Reportes
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-ajustes">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="guardar-ajustes">Guardar Cambios</button>
+        </div>
+    </div>
+</div>
+
