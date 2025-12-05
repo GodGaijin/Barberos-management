@@ -123,16 +123,11 @@ function verificarCambioFecha() {
     
     const ultimaFecha = localStorage.getItem('ultimaFechaSesion');
     
+    // Verificar si es un nuevo día (para lógica adicional si es necesario)
     if (ultimaFecha && ultimaFecha !== fechaHoy) {
         // La fecha cambió, es un nuevo día
-        console.log('Nuevo día detectado:', fechaHoy);
-        // Aquí puedes agregar lógica adicional si es necesario
     } else if (!ultimaFecha) {
         // Primera vez que se inicia, guardar la fecha
-        console.log('Primera sesión del día:', fechaHoy);
-    } else {
-        // Mismo día, no es un nuevo día
-        console.log('Misma fecha, no es un nuevo día:', fechaHoy);
     }
     
     // Actualizar la fecha de sesión
@@ -303,24 +298,21 @@ async function navigateToPage(page) {
     
     if (pageFile) {
         try {
-            console.log(`Cargando página: ${pageFile}`);
             // Cargar HTML de la página
             const response = await fetch(pageFile);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const html = await response.text();
-            console.log(`HTML cargado, insertando en DOM...`);
             content.innerHTML = html;
             
             // Pequeño delay para asegurar que el DOM esté actualizado
             await new Promise(resolve => setTimeout(resolve, 50));
             
             // Inicializar módulo correspondiente (los scripts ya están cargados)
-            console.log(`Inicializando módulo para página: ${page}`);
             initPageModule(page);
         } catch (error) {
-            console.error('Error al cargar la página:', error);
+            console.error('❌ Error al cargar la página:', error);
             content.innerHTML = `<h3>${getPageTitle(page)}</h3><p class="error-message">Error al cargar la página: ${error.message}</p>`;
         }
     } else {
@@ -334,44 +326,33 @@ function initPageModule(page) {
     // Pequeño delay para asegurar que el DOM esté completamente cargado
     setTimeout(() => {
         // Llamar a la función de inicialización específica de la página
+        // Cada módulo tiene su propio log de inicialización
         if (page === 'clientes' && typeof window.initClientes === 'function') {
-            console.log('Inicializando clientes...');
             window.initClientes();
         } else if (page === 'productos' && typeof window.initProductos === 'function') {
-            console.log('Inicializando productos...');
             window.initProductos();
         } else if (page === 'servicios' && typeof window.initServicios === 'function') {
-            console.log('Inicializando servicios...');
             window.initServicios();
         } else if (page === 'empleados' && typeof window.initEmpleados === 'function') {
-            console.log('Inicializando empleados...');
             window.initEmpleados();
         } else if (page === 'consumos-empleados' && typeof window.initConsumosEmpleados === 'function') {
-            console.log('Inicializando consumos de empleados...');
             window.initConsumosEmpleados();
         } else if (page === 'transacciones' && typeof window.initTransacciones === 'function') {
-            console.log('Inicializando transacciones...');
             window.initTransacciones();
         } else if (page === 'nominas' && typeof window.initNominas === 'function') {
-            console.log('Inicializando nóminas...');
             window.initNominas();
         } else if (page === 'reportes' && typeof window.initReportes === 'function') {
-            console.log('Inicializando reportes...');
             window.initReportes();
         } else if (page === 'citas' && typeof window.initCitas === 'function') {
-            console.log('Inicializando citas...');
             window.initCitas();
         } else if (page === 'tasas' && typeof window.initTasas === 'function') {
-            console.log('Inicializando tasas...');
             window.initTasas();
         } else if (page === 'ajustes' && typeof window.initAjustes === 'function') {
-            console.log('Inicializando ajustes...');
             window.initAjustes();
         } else if (page === 'dashboard' && typeof window.initDashboard === 'function') {
-            console.log('Inicializando dashboard...');
             window.initDashboard();
         } else {
-            console.warn(`Función de inicialización no encontrada para ${page}`);
+            console.warn(`⚠️ Función de inicialización no encontrada para: ${page}`);
         }
     }, 100);
 }
@@ -408,68 +389,62 @@ function initUpdater() {
     
     // Escuchar eventos de actualizaciones
     window.updaterAPI.onUpdateAvailable((info) => {
-        console.log('📦 Evento: Actualización disponible recibido:', info);
+        console.log('📦 Actualización disponible:', info.version);
         showUpdateNotification(info, 'available');
     });
     
     window.updaterAPI.onDownloadProgress((progress) => {
-        console.log('📥 Progreso de descarga:', progress.percent + '%');
+        // Solo mostrar progreso cada 10% para no saturar la consola
+        if (progress.percent % 10 === 0) {
+            console.log('📥 Descargando actualización:', progress.percent + '%');
+        }
         updateDownloadProgress(progress);
     });
     
     window.updaterAPI.onUpdateDownloaded((info) => {
-        console.log('✅ Evento: Actualización descargada recibido:', info);
+        console.log('✅ Actualización descargada, lista para instalar:', info.version);
         showUpdateNotification(info, 'downloaded');
     });
+    
+    // Escuchar evento para reprogramar actualizaciones cuando cambie la configuración
+    if (window.electronAPI && window.electronAPI.on) {
+        window.electronAPI.on('reprogramar-actualizaciones', () => {
+            programarVerificacionActualizaciones();
+        });
+    }
     
     // Verificar actualizaciones al iniciar
     verificarActualizacionesInicial();
     
-    // Configurar verificación periódica cada 1 hora (3600000 ms)
-    const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hora
-    updateCheckInterval = setInterval(() => {
-        console.log('🔄 Verificación periódica de actualizaciones (cada 1 hora)...');
-        verificarActualizacionesPeriodica();
-    }, UPDATE_CHECK_INTERVAL);
-    
-    console.log('✅ Verificación periódica de actualizaciones configurada (cada 1 hora)');
+    // Configurar verificación periódica según la configuración del usuario
+    programarVerificacionActualizaciones();
     
     // Función global para verificar manualmente desde la consola
     window.verificarActualizacionesManual = async function() {
-        console.log('🔍 Verificación manual de actualizaciones iniciada...');
-        console.log('📦 Versión actual según package.json:', '1.0.6'); // Esto debería venir del package.json
+        console.log('🔍 Verificando actualizaciones manualmente...');
         
         if (!window.updaterAPI) {
-            console.error('❌ updaterAPI no está disponible');
+            console.error('❌ Sistema de actualizaciones no disponible');
             if (typeof window.mostrarNotificacion === 'function') {
                 window.mostrarNotificacion('Error: Sistema de actualizaciones no disponible', 'error', 5000);
             }
             return;
         }
         
-        console.log('✅ updaterAPI disponible, iniciando verificación...');
-        
         try {
             const result = await window.updaterAPI.checkForUpdates();
-            console.log('📋 Resultado completo de verificación:', result);
-            console.log('📋 Resultado parseado:', JSON.stringify(result, null, 2));
             
             if (typeof window.mostrarNotificacion === 'function') {
                 if (result && result.success) {
-                    window.mostrarNotificacion('Verificación completada. Revisa la consola para detalles.', 'info', 3000);
+                    window.mostrarNotificacion('Verificación completada', 'info', 3000);
                 } else {
                     const errorMsg = result?.error || 'Desconocido';
-                    console.error('❌ Error en resultado:', errorMsg);
+                    console.error('❌ Error al verificar actualizaciones:', errorMsg);
                     window.mostrarNotificacion('Error al verificar: ' + errorMsg, 'error', 5000);
                 }
             }
         } catch (error) {
-            console.error('❌ Excepción al verificar actualizaciones:', error);
-            console.error('📋 Tipo:', error.constructor.name);
-            console.error('📋 Mensaje:', error.message);
-            if (error.stack) {
-                console.error('📋 Stack:', error.stack);
-            }
+            console.error('❌ Error al verificar actualizaciones:', error);
             if (typeof window.mostrarNotificacion === 'function') {
                 window.mostrarNotificacion('Error al verificar: ' + error.message, 'error', 5000);
             }
@@ -507,6 +482,63 @@ async function verificarActualizacionesPeriodica() {
         }
     } catch (error) {
         console.error('❌ Error en verificación periódica de actualizaciones:', error);
+    }
+}
+
+// Programar verificación periódica de actualizaciones según la configuración
+async function programarVerificacionActualizaciones() {
+    // Limpiar intervalo anterior si existe
+    if (updateCheckInterval) {
+        clearInterval(updateCheckInterval);
+        updateCheckInterval = null;
+    }
+    
+    try {
+        // Obtener frecuencia de la configuración (por defecto: cada hora)
+        let frecuencia = 'cada-hora';
+        try {
+            const resultado = await window.electronAPI.dbGet(
+                'SELECT valor FROM Configuracion WHERE clave = ?',
+                ['frecuencia_actualizaciones']
+            );
+            if (resultado && resultado.valor) {
+                frecuencia = resultado.valor;
+            }
+        } catch (error) {
+            console.warn('⚠️ No se pudo obtener la frecuencia de actualizaciones, usando valor por defecto (cada hora)');
+        }
+        
+        // Convertir frecuencia a milisegundos
+        let intervaloMs = 60 * 60 * 1000; // Por defecto: 1 hora
+        switch (frecuencia) {
+            case 'cada-hora':
+                intervaloMs = 60 * 60 * 1000; // 1 hora
+                break;
+            case 'cada-6-horas':
+                intervaloMs = 6 * 60 * 60 * 1000; // 6 horas
+                break;
+            case 'cada-12-horas':
+                intervaloMs = 12 * 60 * 60 * 1000; // 12 horas
+                break;
+            case 'diario':
+                intervaloMs = 24 * 60 * 60 * 1000; // 24 horas
+                break;
+        }
+        
+        // Programar verificación periódica
+        updateCheckInterval = setInterval(() => {
+            verificarActualizacionesPeriodica();
+        }, intervaloMs);
+        
+        const frecuenciaTexto = frecuencia.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        console.log(`✅ Sistema de actualizaciones configurado (verificación ${frecuenciaTexto})`);
+    } catch (error) {
+        console.error('❌ Error al programar verificación de actualizaciones:', error);
+        // Usar valor por defecto si hay error
+        updateCheckInterval = setInterval(() => {
+            verificarActualizacionesPeriodica();
+        }, 60 * 60 * 1000);
+        console.log('✅ Sistema de actualizaciones configurado (verificación cada 1 hora - por defecto)');
     }
 }
 

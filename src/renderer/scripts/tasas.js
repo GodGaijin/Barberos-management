@@ -19,12 +19,11 @@
     var initialized = window.tasasModule.initialized;
 
     // Inicialización - función exportada para ser llamada desde main.js
+    // Inicializa el módulo de tasas cuando se carga la página
     window.initTasas = function() {
-        console.log('initTasas llamado');
         // Verificar que estamos en la página de tasas
         const tbody = document.getElementById('tasas-table-body');
         if (!tbody) {
-            console.warn('initTasas llamado pero no estamos en la página de tasas. Ignorando...');
             return;
         }
         
@@ -32,15 +31,13 @@
         // Pequeño delay para asegurar que el DOM esté completamente cargado
         setTimeout(() => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando tasas...');
                 cargarTasas();
                 actualizarTasaActual();
                 window.tasasModule.initialized = true;
-                console.log('Tasas inicializadas correctamente');
+                console.log('✅ Módulo de tasas inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar tasas:', error);
+                console.error('❌ Error al inicializar tasas:', error);
                 const tbody = document.getElementById('tasas-table-body');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="4" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
@@ -151,10 +148,10 @@
                 throw new Error('electronAPI no está disponible');
             }
             
-            console.log('Consultando base de datos...');
-            // Ordenar por ID descendente (más recientes primero) ya que el ID es autoincremental
+            // Consultar todas las tasas ordenadas por ID descendente (más recientes primero)
             const resultados = await window.electronAPI.dbQuery('SELECT * FROM TasasCambio ORDER BY id DESC');
-            console.log('Tasas obtenidas:', resultados);
+            
+            console.log(`💱 Tasas cargadas: ${resultados?.length || 0} registros`);
             
             window.tasasModule.tasas = resultados || [];
             // Actualizar referencia local
@@ -500,7 +497,6 @@
                     // Forzar focus y selección para verificar que es editable
                     tasaValor.focus();
                     tasaValor.select();
-                    console.log('Campo tasa editable:', !tasaValor.disabled && !tasaValor.readOnly && tasaValor.style.pointerEvents !== 'none');
                 }, 150);
             } else {
                 console.error('Modal no encontrado');

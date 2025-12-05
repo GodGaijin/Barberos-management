@@ -64,13 +64,10 @@ function createWindow() {
 function initializeDatabase() {
   try {
     const userDataPath = app.getPath('userData');
-    console.log('Inicializando base de datos en:', userDataPath);
     db = new Database(userDataPath);
     console.log('✅ Base de datos inicializada correctamente');
-    console.log('📊 Base de datos lista para consultas');
   } catch (error) {
-    console.error('❌ Error al inicializar la base de datos:', error);
-    console.error('📋 Detalles:', error.message);
+    console.error('❌ Error crítico al inicializar la base de datos:', error);
     if (error.stack) {
       console.error('📋 Stack:', error.stack);
     }
@@ -82,12 +79,12 @@ function initializeDatabase() {
 ipcMain.handle('db-query', async (event, query, params = []) => {
   try {
     if (!db) {
-      console.error('Base de datos no inicializada en db-query');
+      console.error('❌ Base de datos no inicializada en db-query');
       throw new Error('Base de datos no inicializada');
     }
     return db.query(query, params);
   } catch (error) {
-    console.error('Error en query:', error);
+    console.error('❌ Error en consulta a base de datos:', error.message);
     throw error;
   }
 });
@@ -95,12 +92,12 @@ ipcMain.handle('db-query', async (event, query, params = []) => {
 ipcMain.handle('db-run', async (event, query, params = []) => {
   try {
     if (!db) {
-      console.error('Base de datos no inicializada en db-run');
+      console.error('❌ Base de datos no inicializada en db-run');
       throw new Error('Base de datos no inicializada');
     }
     return db.run(query, params);
   } catch (error) {
-    console.error('Error en run:', error);
+    console.error('❌ Error al ejecutar comando en base de datos:', error.message);
     throw error;
   }
 });
@@ -108,12 +105,12 @@ ipcMain.handle('db-run', async (event, query, params = []) => {
 ipcMain.handle('db-get', async (event, query, params = []) => {
   try {
     if (!db) {
-      console.error('Base de datos no inicializada en db-get');
+      console.error('❌ Base de datos no inicializada en db-get');
       throw new Error('Base de datos no inicializada');
     }
     return db.get(query, params);
   } catch (error) {
-    console.error('Error en get:', error);
+    console.error('❌ Error al obtener registro de base de datos:', error.message);
     throw error;
   }
 });
@@ -129,34 +126,22 @@ ipcMain.handle('auth-login', async (event, username, password) => {
     const bcrypt = require('bcryptjs');
     const user = db.get('SELECT * FROM Usuarios WHERE username = ?', [username]);
     
-    console.log('Intento de login para usuario:', username);
-    console.log('Usuario encontrado:', user ? 'Sí' : 'No');
-    
     if (!user) {
-      console.log('Usuario no encontrado en la base de datos');
+      console.warn('⚠️ Intento de login fallido: usuario no encontrado');
       return { success: false, message: 'Usuario o contraseña incorrectos' };
     }
-    
-    console.log('Hash almacenado:', user.password_hash);
-    console.log('Comparando contraseña...');
     
     const isValid = bcrypt.compareSync(password, user.password_hash);
     
-    console.log('Resultado de comparación:', isValid);
-    
     if (!isValid) {
-      // Intentar verificar si el hash es correcto generando uno nuevo para comparar
-      const testHash = bcrypt.hashSync(password, 10);
-      console.log('Hash de prueba generado:', testHash);
-      console.log('¿Los hashes coinciden?', user.password_hash === testHash);
-      
+      console.warn('⚠️ Intento de login fallido: contraseña incorrecta');
       return { success: false, message: 'Usuario o contraseña incorrectos' };
     }
     
-    console.log('Login exitoso');
+    console.log('✅ Login exitoso para usuario:', username);
     return { success: true, user: { id: user.id, username: user.username } };
   } catch (error) {
-    console.error('Error en autenticación:', error);
+    console.error('❌ Error crítico en autenticación:', error);
     return { success: false, message: 'Error al iniciar sesión' };
   }
 });
@@ -193,16 +178,10 @@ try {
   
   // Configurar el feed URL
   autoUpdater.setFeedURL(feedURL);
-  console.log('✅ Auto-updater configurado para:', { ...feedURL, token: githubToken ? '***' : 'no configurado' });
-  console.log('🔗 URL esperada: https://github.com/GodGaijin/Barberos-management/releases/latest/download/latest.yml');
-  
-  // Verificar que la configuración se aplicó correctamente
-  const currentFeedURL = autoUpdater.getFeedURL();
-  console.log('📋 Feed URL configurado:', currentFeedURL ? 'OK' : 'ERROR');
+  console.log('✅ Auto-updater configurado correctamente');
   
 } catch (error) {
-  console.error('❌ Error al configurar auto-updater:', error);
-  console.error('📋 Detalles:', error.message);
+  console.error('❌ Error crítico al configurar auto-updater:', error);
 }
 
 // Eventos del auto-updater
@@ -212,24 +191,17 @@ autoUpdater.on('checking-for-update', () => {
 
 autoUpdater.on('update-available', (info) => {
   console.log('✅ Actualización disponible:', info.version);
-  console.log('📦 Información completa:', JSON.stringify(info, null, 2));
   if (mainWindow) {
     mainWindow.webContents.send('update-available', info);
   }
 });
 
-autoUpdater.on('update-not-available', (info) => {
-  console.log('ℹ️ No hay actualizaciones disponibles');
-  console.log('📋 Versión actual instalada:', app.getVersion());
-  console.log('📋 Información recibida:', JSON.stringify(info, null, 2));
-  console.log('💡 Esto significa que la versión instalada es igual o mayor que la del release');
-  console.log('💡 Para probar, instala una versión anterior (ej: 1.0.5) y luego verifica');
+autoUpdater.on('update-not-available', () => {
+  console.log('ℹ️ No hay actualizaciones disponibles (versión actual:', app.getVersion() + ')');
 });
 
 autoUpdater.on('error', (err) => {
-  console.error('❌ Error en auto-updater:', err);
-  console.error('📋 Detalles del error:', err.message);
-  console.error('📋 Stack:', err.stack);
+  console.error('❌ Error en auto-updater:', err.message);
   if (mainWindow) {
     mainWindow.webContents.send('update-error', err.message);
   }
@@ -251,35 +223,14 @@ autoUpdater.on('update-downloaded', (info) => {
 // IPC handlers para actualizaciones
 ipcMain.handle('check-for-updates', async () => {
   try {
-    console.log('📡 IPC: check-for-updates llamado');
-    console.log('🔍 Verificando configuración del autoUpdater...');
-    
-    const feedURL = autoUpdater.getFeedURL();
-    console.log('  - Feed URL:', feedURL);
-    console.log('  - Provider:', feedURL?.provider || 'github');
-    console.log('  - Owner:', feedURL?.owner || 'GodGaijin');
-    console.log('  - Repo:', feedURL?.repo || 'Barberos-management');
-    
-    // Verificar que el repositorio sea accesible
-    const testURL = `https://github.com/${feedURL?.owner || 'GodGaijin'}/${feedURL?.repo || 'Barberos-management'}/releases/latest/download/latest.yml`;
-    console.log('🔗 URL de prueba:', testURL);
-    
     const result = await autoUpdater.checkForUpdates();
-    console.log('✅ Resultado de checkForUpdates:', JSON.stringify(result, null, 2));
     return { success: true, result };
   } catch (error) {
-    console.error('❌ Error al verificar actualizaciones:', error);
-    console.error('📋 Tipo de error:', error.constructor.name);
-    console.error('📋 Mensaje:', error.message);
+    console.error('❌ Error al verificar actualizaciones:', error.message);
     
     // Si es un error 404, dar sugerencias específicas
     if (error.message && error.message.includes('404')) {
-      console.error('💡 Error 404 detectado. Posibles causas:');
-      console.error('   1. El repositorio es privado (necesita token GITHUB_TOKEN)');
-      console.error('   2. El nombre del repositorio está incorrecto');
-      console.error('   3. El repositorio no tiene releases publicados');
-      console.error('   4. El repositorio no existe o no es accesible');
-      console.error('💡 Verifica que el repositorio sea público y tenga al menos un release publicado');
+      console.error('💡 Error 404: Verifica que el repositorio sea público y tenga releases publicados');
     }
     
     if (error.stack) {
@@ -844,6 +795,14 @@ ipcMain.on('reprogramar-respaldos', () => {
 // Handler para re-programar reportes cuando cambie la configuración
 ipcMain.on('reprogramar-reportes', () => {
   programarReportesAutomaticos();
+});
+
+// Handler para re-programar actualizaciones cuando cambie la configuración
+ipcMain.on('reprogramar-actualizaciones', () => {
+  // Enviar mensaje al renderer para reprogramar
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('reprogramar-actualizaciones');
+  }
 });
 
 // Función para verificar actualizaciones

@@ -23,26 +23,24 @@
 
     // Inicialización - función exportada para ser llamada desde main.js
     window.initReportes = function() {
-        console.log('initReportes llamado');
+        // Inicializa el módulo de reportes cuando se carga la página
         setTimeout(() => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando datos...');
                 cargarReportes();
                 
                 // Listener para generación automática de reportes
                 if (window.electronAPI && window.electronAPI.onGenerarReporteAutomatico) {
                     window.electronAPI.onGenerarReporteAutomatico((fechaFormato) => {
-                        console.log('📊 Generando reporte automático para:', fechaFormato);
+                        console.log(`📊 Generando reporte automático para: ${fechaFormato}`);
                         generarReporteParaFecha(fechaFormato);
                     });
                 }
                 
                 window.reportesModule.initialized = true;
-                console.log('Reportes inicializados correctamente');
+                console.log('✅ Módulo de reportes inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar reportes:', error);
+                console.error('❌ Error al inicializar reportes:', error);
                 const tbody = document.getElementById('reportes-table-body');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="7" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
@@ -64,8 +62,9 @@
                 [fechaFormato]
             );
 
+            // Si ya existe un reporte para esta fecha, no generar otro
             if (reporteExistente) {
-                console.log(`ℹ️ Ya existe un reporte para ${fechaFormato}`);
+                console.log(`ℹ️ Ya existe un reporte para ${fechaFormato}, omitiendo generación`);
                 return;
             }
 
@@ -84,9 +83,9 @@
                 window._generarReporteSinContraseña = false;
             }
             
-            console.log(`✅ Reporte automático generado para ${fechaFormato}`);
+            console.log(`✅ Reporte automático generado exitosamente para ${fechaFormato}`);
         } catch (error) {
-            console.error('Error al generar reporte automático:', error);
+            console.error('❌ Error al generar reporte automático:', error);
         }
     }
 
@@ -181,7 +180,7 @@
     // Cargar reportes desde la base de datos
     async function cargarReportes() {
         try {
-            console.log('Iniciando carga de reportes...');
+            // Obtiene todos los reportes de la base de datos y los muestra en la tabla
             const tbody = document.getElementById('reportes-table-body');
             if (tbody) {
                 tbody.innerHTML = '<tr><td colspan="7" class="loading">Cargando reportes...</td></tr>';
@@ -191,13 +190,13 @@
                 throw new Error('electronAPI no está disponible');
             }
             
-            console.log('Consultando base de datos...');
+            // Consultar todos los reportes ordenados por fecha más reciente
             const resultados = await window.electronAPI.dbQuery(`
                 SELECT * FROM ReportesDiarios
                 ORDER BY id DESC
             `);
-            console.log('Reportes obtenidos:', resultados);
             
+            console.log(`📄 Reportes cargados: ${resultados?.length || 0} registros`);
             window.reportesModule.reportes = resultados || [];
             reportes.length = 0;
             if (window.reportesModule.reportes.length > 0) {
@@ -485,9 +484,11 @@
             const totalNominasBs = nominas
                 .filter(n => n.moneda_pago === 'bs' || n.moneda_pago === 'mixto')
                 .reduce((sum, n) => sum + parseFloat(n.total_pagado_bs || 0), 0);
+            // IMPORTANTE: Aplicar redondeo hacia abajo (floor) a cada nómina en dólares antes de sumar
+            // Cualquier cantidad decimal se redondea hacia abajo a favor del comercio
             const totalNominasDolares = nominas
                 .filter(n => n.moneda_pago === 'dolares' || n.moneda_pago === 'mixto')
-                .reduce((sum, n) => sum + parseFloat(n.total_pagado_dolares || 0), 0);
+                .reduce((sum, n) => sum + Math.floor(parseFloat(n.total_pagado_dolares || 0)), 0);
             const totalNominas = totalNominasBs; // Mantener para compatibilidad
             
             const totalServicios = servicios.length;
@@ -548,17 +549,6 @@
                             totalIngresosBs += pagadoBs; // Equivale a (pagadoBs * proporcionServicios) + (pagadoBs * proporcionProductos)
                             totalIngresosDolares += (pagadoDolares * proporcionServicios);
                             
-                            // Debug: Log para verificar el cálculo
-                            console.log(`[Reporte] Transacción ${t.id}:`, {
-                                pagadoBs: pagadoBs.toFixed(2),
-                                pagadoDolares: pagadoDolares.toFixed(2),
-                                totalServiciosTransaccionBs: totalServiciosTransaccionBs.toFixed(2),
-                                totalProductosTransaccionBs: totalProductosTransaccionBs.toFixed(2),
-                                proporcionServicios: proporcionServicios.toFixed(4),
-                                proporcionProductos: proporcionProductos.toFixed(4),
-                                ingresosBsCalculados: pagadoBs.toFixed(2),
-                                ingresosDolaresCalculados: (pagadoDolares * proporcionServicios).toFixed(2)
-                            });
                         } else if (pagadoBs > 0) {
                             // Solo bolívares: servicios y productos van a bolívares
                             totalIngresosBs += pagadoBs;
@@ -691,6 +681,7 @@
                     nombre: s.nombre_servicio,
                     empleado: s.nombre_empleado,
                     precio: s.precio_cobrado,
+                    precio_dolares: tasa ? (parseFloat(s.precio_cobrado || 0) / parseFloat(tasa.tasa_bs_por_dolar)).toFixed(2) : '0.00',
                     propina: s.propina,
                     propina_dolares: s.propina_en_dolares || 0,
                     pagado_bs: s.pagado_bs || 0,
@@ -699,7 +690,8 @@
                 productos: productos.map(p => ({
                     nombre: p.nombre_producto,
                     cantidad: p.cantidad,
-                    precio_total: p.precio_total
+                    precio_total: p.precio_total,
+                    precio_total_dolares: tasa ? (parseFloat(p.precio_total || 0) / parseFloat(tasa.tasa_bs_por_dolar)).toFixed(2) : '0.00'
                 }))
             });
 
@@ -737,6 +729,9 @@
             }
 
             const resumen = JSON.parse(reporte.resumen || '{}');
+            
+            // Obtener tasa de cambio del reporte para calcular precios en dólares si no están guardados
+            const tasaCambio = reporte.tasa_cambio ? parseFloat(reporte.tasa_cambio) : null;
             
             // Formatear fecha
             let fechaReporte = reporte.fecha_reporte;
@@ -822,6 +817,21 @@
                         
                         // Nóminas pagadas en Dólares
                         if (nominasDolares.length > 0) {
+                            // Calcular totales usando el mismo método que las filas individuales
+                            let totalComisionesDolares = 0;
+                            let totalPropinasDolares = 0;
+                            let totalPagadoDolares = 0;
+                            
+                            nominasDolares.forEach(n => {
+                                const comisiones = parseFloat(n.comisiones_dolares || 0);
+                                const propinas = parseFloat(n.propinas_dolares || 0);
+                                const total = parseFloat(n.total_pagado_dolares || 0) || (comisiones + propinas);
+                                
+                                totalComisionesDolares += comisiones;
+                                totalPropinasDolares += propinas;
+                                totalPagadoDolares += total;
+                            });
+                            
                             html += `
                             <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
                                 <h4 style="margin-top: 0; color: var(--text-primary);">Nóminas Pagadas en Dólares (${nominasDolares.length})</h4>
@@ -829,20 +839,31 @@
                                     <thead>
                                         <tr style="border-bottom: 1px solid var(--border-color);">
                                             <th style="text-align: left; padding: 8px;">Empleado</th>
-                                            <th style="text-align: right; padding: 8px;">Comisiones Ref. ($)</th>
-                                            <th style="text-align: right; padding: 8px;">Propinas Ref. ($)</th>
+                                            <th style="text-align: right; padding: 8px;">Comisiones ($)</th>
+                                            <th style="text-align: right; padding: 8px;">Propinas ($)</th>
                                             <th style="text-align: right; padding: 8px;">Total ($)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${nominasDolares.map(n => `
+                                        ${nominasDolares.map(n => {
+                                            // Calcular total si no está guardado (suma de comisiones + propinas)
+                                            const totalDolares = parseFloat(n.total_pagado_dolares || 0) || 
+                                                                (parseFloat(n.comisiones_dolares || 0) + parseFloat(n.propinas_dolares || 0));
+                                            return `
                                             <tr style="border-bottom: 1px solid var(--border-color);">
                                                 <td style="padding: 8px;">${n.empleado}</td>
                                                 <td style="text-align: right; padding: 8px;">$${parseFloat(n.comisiones_dolares || 0).toFixed(2)}</td>
                                                 <td style="text-align: right; padding: 8px;">$${parseFloat(n.propinas_dolares || 0).toFixed(2)}</td>
-                                                <td style="text-align: right; padding: 8px;"><strong>$${parseFloat(n.total_pagado_dolares || 0).toFixed(2)}</strong></td>
+                                                <td style="text-align: right; padding: 8px;"><strong>$${totalDolares.toFixed(2)}</strong></td>
                                             </tr>
-                                        `).join('')}
+                                        `;
+                                        }).join('')}
+                                        <tr style="border-top: 2px solid var(--border-color); font-weight: bold; background: var(--bg-primary);">
+                                            <td style="padding: 8px;"><strong>Total</strong></td>
+                                            <td style="text-align: right; padding: 8px;"><strong>$${totalComisionesDolares.toFixed(2)}</strong></td>
+                                            <td style="text-align: right; padding: 8px;"><strong>$${totalPropinasDolares.toFixed(2)}</strong></td>
+                                            <td style="text-align: right; padding: 8px;"><strong>$${totalPagadoDolares.toFixed(2)}</strong></td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1028,7 +1049,8 @@
                                         <thead>
                                             <tr style="border-bottom: 1px solid var(--border-color);">
                                                 <th style="text-align: left; padding: 8px;">Servicio</th>
-                                                <th style="text-align: right; padding: 8px;">Precio</th>
+                                                <th style="text-align: right; padding: 8px;">Precio (Bs)</th>
+                                                <th style="text-align: right; padding: 8px;">Precio ($)</th>
                                                 <th style="text-align: right; padding: 8px;">Propina (Bs)</th>
                                                 <th style="text-align: right; padding: 8px;">Propina ($)</th>
                                             </tr>
@@ -1037,10 +1059,17 @@
                                             ${emp.servicios.map(s => {
                                                 const esPropinaIndependiente = s.nombre === 'Propina Independiente';
                                                 const precioTexto = esPropinaIndependiente ? 'N/A' : `${parseFloat(s.precio || 0).toFixed(2)} Bs`;
+                                                // Calcular precio en dólares si no está guardado (para reportes antiguos)
+                                                let precioDolares = parseFloat(s.precio_dolares || 0);
+                                                if (precioDolares === 0 && !esPropinaIndependiente && tasaCambio && parseFloat(s.precio || 0) > 0) {
+                                                    precioDolares = parseFloat(s.precio || 0) / tasaCambio;
+                                                }
+                                                const precioDolaresTexto = esPropinaIndependiente ? 'N/A' : `$${precioDolares.toFixed(2)}`;
                                                 return `
                                                 <tr style="border-bottom: 1px solid var(--border-color);">
                                                     <td style="padding: 8px;">${s.nombre}</td>
                                                     <td style="text-align: right; padding: 8px;">${precioTexto}</td>
+                                                    <td style="text-align: right; padding: 8px;">${precioDolaresTexto}</td>
                                                     <td style="text-align: right; padding: 8px;">${parseFloat(s.propina || 0).toFixed(2)} Bs</td>
                                                     <td style="text-align: right; padding: 8px;">$${parseFloat(s.propina_dolares || 0).toFixed(2)}</td>
                                                 </tr>
@@ -1062,17 +1091,26 @@
                                 <tr style="border-bottom: 1px solid var(--border-color);">
                                     <th style="text-align: left; padding: 8px;">Producto</th>
                                     <th style="text-align: right; padding: 8px;">Cantidad</th>
-                                    <th style="text-align: right; padding: 8px;">Total</th>
+                                    <th style="text-align: right; padding: 8px;">Total (Bs)</th>
+                                    <th style="text-align: right; padding: 8px;">Total ($)</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                ${resumen.productos.map(p => `
+                                ${resumen.productos.map(p => {
+                                    // Calcular precio en dólares si no está guardado (para reportes antiguos)
+                                    let precioTotalDolares = parseFloat(p.precio_total_dolares || 0);
+                                    if (precioTotalDolares === 0 && tasaCambio && parseFloat(p.precio_total || 0) > 0) {
+                                        precioTotalDolares = parseFloat(p.precio_total || 0) / tasaCambio;
+                                    }
+                                    return `
                                     <tr style="border-bottom: 1px solid var(--border-color);">
                                         <td style="padding: 8px;">${p.nombre}</td>
                                         <td style="text-align: right; padding: 8px;">${p.cantidad}</td>
                                         <td style="text-align: right; padding: 8px;">${parseFloat(p.precio_total).toFixed(2)} Bs</td>
+                                        <td style="text-align: right; padding: 8px;">$${precioTotalDolares.toFixed(2)}</td>
                                     </tr>
-                                `).join('')}
+                                `;
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>

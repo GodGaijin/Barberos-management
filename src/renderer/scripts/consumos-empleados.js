@@ -28,18 +28,16 @@
     let consumosFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
+    // Inicializa el módulo de consumos de empleados cuando se carga la página
     window.initConsumosEmpleados = function() {
-        console.log('initConsumosEmpleados llamado');
         setTimeout(() => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando datos...');
                 cargarDatos();
                 window.consumosModule.initialized = true;
-                console.log('Consumos inicializados correctamente');
+                console.log('✅ Módulo de consumos inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar consumos:', error);
+                console.error('❌ Error al inicializar consumos:', error);
                 const tbody = document.getElementById('consumos-table-body');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="9" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';

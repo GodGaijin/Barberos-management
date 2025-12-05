@@ -41,21 +41,19 @@
 
     // Inicialización - función exportada para ser llamada desde main.js
     window.initTransacciones = function() {
-        console.log('initTransacciones llamado');
+        // Inicializa el módulo de transacciones cuando se carga la página
         setTimeout(() => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando datos...');
                 cargarDatos();
                 window.transaccionesModule.initialized = true;
-                console.log('Transacciones inicializadas correctamente');
+                console.log('✅ Módulo de transacciones inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar transacciones:', error);
+                console.error('❌ Error al inicializar transacciones:', error);
                 const tbody = document.getElementById('transacciones-table-body');
-                if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
-                }
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="8" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
+            }
             }
         }, 150);
     };
@@ -1107,17 +1105,17 @@
     // Cargar transacciones desde la base de datos
     async function cargarTransacciones() {
         try {
-            console.log('Iniciando carga de transacciones...');
+            // Obtiene todas las transacciones de la base de datos y las muestra en la tabla
             const tbody = document.getElementById('transacciones-table-body');
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="7" class="loading">Cargando transacciones...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="loading">Cargando transacciones...</td></tr>';
             }
             
             if (!window.electronAPI || !window.electronAPI.dbQuery) {
                 throw new Error('electronAPI no está disponible');
             }
             
-            console.log('Consultando base de datos...');
+            // Consultar todas las transacciones con el nombre del cliente
             const resultados = await window.electronAPI.dbQuery(`
                 SELECT 
                     t.*,
@@ -1126,8 +1124,8 @@
                 JOIN Clientes c ON t.id_cliente = c.id
                 ORDER BY t.id DESC
             `);
-            console.log('Transacciones obtenidas:', resultados);
             
+            console.log(`💳 Transacciones cargadas: ${resultados?.length || 0} registros`);
             window.transaccionesModule.transacciones = resultados || [];
             transacciones.length = 0;
             if (window.transaccionesModule.transacciones.length > 0) {
@@ -1139,7 +1137,7 @@
             console.error('Error al cargar transacciones:', error);
             const tbody = document.getElementById('transacciones-table-body');
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="7" class="error-message">Error al cargar las transacciones: ' + (error.message || error) + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="error-message">Error al cargar las transacciones: ' + (error.message || error) + '</td></tr>';
             }
             mostrarError('Error al cargar las transacciones: ' + (error.message || error));
         }
@@ -1200,7 +1198,7 @@
         transaccionesFiltradas = listaTransacciones;
         
         if (listaTransacciones.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay transacciones registradas</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay transacciones registradas</td></tr>';
             renderPaginationTransacciones(1, 1);
             return;
         }
@@ -1251,6 +1249,11 @@
             
             const globalIndex = startIndex + index + 1;
             
+            // Mostrar precio en dólares solo si la transacción está cerrada
+            const totalDolaresDisplay = transaccion.estado === 'cerrada' 
+                ? `$${parseFloat(transaccion.total_en_dolares || 0).toFixed(2)}` 
+                : '-';
+            
             return `
                 <tr class="${estadoClass}">
                     <td>#${globalIndex}</td>
@@ -1258,6 +1261,7 @@
                     <td>${fechaApertura}</td>
                     <td>${fechaCierre}</td>
                     <td>${parseFloat(transaccion.total_en_bs || 0).toFixed(2)} Bs</td>
+                    <td>${totalDolaresDisplay}</td>
                     <td><span class="badge ${estadoClass}">${estadoText}</span></td>
                     <td class="actions">
                         ${transaccion.estado === 'abierta' ? `
@@ -1390,9 +1394,18 @@
     }
 
     function filtrarTransacciones() {
-        const searchTerm = document.getElementById('search-transaccion').value.toLowerCase();
-        const filterEstado = document.getElementById('filter-estado').value;
+        const searchInput = document.getElementById('search-transaccion');
+        const filterEstadoInput = document.getElementById('filter-estado');
         const filterFechaEspecifica = document.getElementById('filter-fecha-especifica');
+        
+        // Verificar que los elementos existan antes de acceder a sus propiedades
+        if (!searchInput || !filterEstadoInput) {
+            console.warn('Elementos de filtro no encontrados, saltando filtrado');
+            return;
+        }
+        
+        const searchTerm = searchInput.value ? searchInput.value.toLowerCase() : '';
+        const filterEstado = filterEstadoInput.value || 'all';
 
         let transaccionesFiltradas = transacciones;
 
@@ -2053,8 +2066,326 @@
                     pagadoDolaresInput.value = '';
                 }
             }
+            
+            // Actualizar campos de "pagando" y "falta por pagar" después de calcular
+            actualizarPagandoYFalta();
         } catch (error) {
             console.error('Error al calcular cantidad pagada:', error);
+        }
+    }
+
+    // Función para actualizar los campos de "pagando" y "falta por pagar"
+    async function actualizarPagandoYFalta() {
+        try {
+            const totalBs = window.transaccionesModule.totalTransaccionBs || 0;
+            const totalDolares = window.transaccionesModule.totalTransaccionDolares || 0;
+            
+            // Obtener valores ingresados en los campos de cantidad pagada
+            const pagadoBsInput = document.getElementById('cerrar-pagado-bs');
+            const pagadoDolaresInput = document.getElementById('cerrar-pagado-dolares');
+            
+            let pagadoBs = 0;
+            let pagadoDolares = 0;
+            
+            if (pagadoBsInput) {
+                const valorBs = pagadoBsInput.value || '';
+                if (valorBs && valorBs.trim() !== '') {
+                    // Obtener valor numérico (puede estar formateado)
+                    if (typeof window.obtenerValorNumerico === 'function' && pagadoBsInput._formateadoPrecio) {
+                        try {
+                            pagadoBs = window.obtenerValorNumerico(valorBs) || 0;
+                        } catch (e) {
+                            // Si falla, usar parseFloat como fallback
+                            pagadoBs = parseFloat(valorBs.replace(/[^\d.]/g, '')) || 0;
+                        }
+                    } else {
+                        pagadoBs = parseFloat(valorBs.replace(/[^\d.]/g, '')) || 0;
+                    }
+                }
+            }
+            
+            if (pagadoDolaresInput) {
+                const valorDolares = pagadoDolaresInput.value || '';
+                if (valorDolares && valorDolares.trim() !== '') {
+                    // Obtener valor numérico (puede estar formateado)
+                    if (typeof window.obtenerValorNumerico === 'function' && pagadoDolaresInput._formateadoPrecio) {
+                        try {
+                            pagadoDolares = window.obtenerValorNumerico(valorDolares) || 0;
+                        } catch (e) {
+                            // Si falla, usar parseFloat como fallback
+                            pagadoDolares = parseFloat(valorDolares.replace(/[^\d.]/g, '')) || 0;
+                        }
+                    } else {
+                        pagadoDolares = parseFloat(valorDolares.replace(/[^\d.]/g, '')) || 0;
+                    }
+                }
+            }
+            
+            // IMPORTANTE: El total en Bs y $ son equivalentes, no se deben pagar ambos
+            // Si el cliente paga en ambas monedas, se calcula el exceso sumando ambos convertidos a una moneda base
+            
+            // Obtener tasa de cambio para convertir entre monedas
+            let tasaCambio = null;
+            try {
+                const fechaHoy = new Date();
+                const dia = String(fechaHoy.getDate()).padStart(2, '0');
+                const mes = String(fechaHoy.getMonth() + 1).padStart(2, '0');
+                const año = fechaHoy.getFullYear();
+                const fechaFormato = `${dia}/${mes}/${año}`;
+                
+                const tasa = await window.electronAPI.dbGet(
+                    'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+                    [fechaFormato]
+                );
+                
+                if (tasa && tasa.tasa_bs_por_dolar > 0) {
+                    tasaCambio = parseFloat(tasa.tasa_bs_por_dolar);
+                }
+            } catch (error) {
+                console.error('Error al obtener tasa de cambio:', error);
+            }
+            
+            // Convertir todo a bolívares para calcular el total pagado
+            let totalPagadoEnBs = pagadoBs;
+            if (tasaCambio && pagadoDolares > 0) {
+                totalPagadoEnBs += pagadoDolares * tasaCambio;
+            }
+            
+            // Calcular lo que falta y el exceso en bolívares
+            const faltaBs = Math.max(0, totalBs - totalPagadoEnBs);
+            const excesoBs = Math.max(0, totalPagadoEnBs - totalBs);
+            
+            // Calcular lo que falta y el exceso en dólares (convertir desde bolívares)
+            let faltaDolares = 0;
+            let excesoDolares = 0;
+            if (tasaCambio) {
+                faltaDolares = faltaBs / tasaCambio;
+                excesoDolares = excesoBs / tasaCambio;
+            } else {
+                // Si no hay tasa, calcular independientemente
+                faltaDolares = Math.max(0, totalDolares - pagadoDolares);
+                excesoDolares = Math.max(0, pagadoDolares - totalDolares);
+            }
+            
+            // Debug: mostrar valores en consola
+            console.log('[Actualizar Pagando]', {
+                totalBs: totalBs.toFixed(2),
+                totalDolares: totalDolares.toFixed(2),
+                pagadoBs: pagadoBs.toFixed(2),
+                pagadoDolares: pagadoDolares.toFixed(2),
+                tasaCambio: tasaCambio ? tasaCambio.toFixed(2) : 'N/A',
+                totalPagadoEnBs: totalPagadoEnBs.toFixed(2),
+                faltaBs: faltaBs.toFixed(2),
+                faltaDolares: faltaDolares.toFixed(2),
+                excesoBs: excesoBs.toFixed(2),
+                excesoDolares: excesoDolares.toFixed(2)
+            });
+            
+            // Actualizar campos de "pagando"
+            const pagandoBsDiv = document.getElementById('cerrar-pagando-bs');
+            const pagandoDolaresDiv = document.getElementById('cerrar-pagando-dolares');
+            if (pagandoBsDiv) {
+                pagandoBsDiv.textContent = `${pagadoBs.toFixed(2)} Bs`;
+                // Cambiar color según si está completo o no
+                if (faltaBs === 0 && excesoBs === 0) {
+                    pagandoBsDiv.style.color = '#4caf50'; // Verde si está completo exacto
+                } else if (excesoBs > 0) {
+                    pagandoBsDiv.style.color = '#ff9800'; // Naranja si hay exceso
+                } else {
+                    pagandoBsDiv.style.color = 'var(--text-primary)';
+                }
+            }
+            if (pagandoDolaresDiv) {
+                pagandoDolaresDiv.textContent = `$${pagadoDolares.toFixed(2)}`;
+                // Cambiar color según si está completo o no
+                if (faltaDolares === 0 && excesoDolares === 0) {
+                    pagandoDolaresDiv.style.color = '#4caf50'; // Verde si está completo exacto
+                } else if (excesoDolares > 0) {
+                    pagandoDolaresDiv.style.color = '#ff9800'; // Naranja si hay exceso
+                } else {
+                    pagandoDolaresDiv.style.color = 'var(--text-primary)';
+                }
+            }
+            
+            // Actualizar campos de "falta por pagar"
+            const faltaBsDiv = document.getElementById('cerrar-falta-bs');
+            const faltaDolaresDiv = document.getElementById('cerrar-falta-dolares');
+            if (faltaBsDiv) {
+                faltaBsDiv.textContent = `${faltaBs.toFixed(2)} Bs`;
+                // Cambiar color según si falta o no
+                if (faltaBs === 0) {
+                    faltaBsDiv.style.color = '#4caf50'; // Verde si no falta
+                } else {
+                    faltaBsDiv.style.color = '#f44336'; // Rojo si falta
+                }
+            }
+            if (faltaDolaresDiv) {
+                faltaDolaresDiv.textContent = `$${faltaDolares.toFixed(2)}`;
+                // Cambiar color según si falta o no
+                if (faltaDolares === 0) {
+                    faltaDolaresDiv.style.color = '#4caf50'; // Verde si no falta
+                } else {
+                    faltaDolaresDiv.style.color = '#f44336'; // Rojo si falta
+                }
+            }
+            
+            // Actualizar campos de "exceso/cambio"
+            const excesoBsDiv = document.getElementById('cerrar-exceso-bs');
+            const excesoDolaresDiv = document.getElementById('cerrar-exceso-dolares');
+            if (excesoBsDiv) {
+                // Mostrar exceso si es mayor que 0 (usar un pequeño margen para evitar problemas de precisión)
+                if (excesoBs > 0.01) {
+                    excesoBsDiv.textContent = `${excesoBs.toFixed(2)} Bs`;
+                    excesoBsDiv.style.color = '#ff9800'; // Naranja para indicar exceso
+                    excesoBsDiv.style.display = 'block';
+                    console.log('[Exceso Bs] Mostrando exceso:', excesoBs.toFixed(2));
+                } else {
+                    excesoBsDiv.style.display = 'none';
+                }
+            }
+            if (excesoDolaresDiv) {
+                // Mostrar exceso si es mayor que 0 (usar un pequeño margen para evitar problemas de precisión)
+                if (excesoDolares > 0.01) {
+                    excesoDolaresDiv.textContent = `$${excesoDolares.toFixed(2)}`;
+                    excesoDolaresDiv.style.color = '#ff9800'; // Naranja para indicar exceso
+                    excesoDolaresDiv.style.display = 'block';
+                    console.log('[Exceso $] Mostrando exceso:', excesoDolares.toFixed(2));
+                } else {
+                    excesoDolaresDiv.style.display = 'none';
+                }
+            }
+        } catch (error) {
+            console.error('Error al actualizar campos de pagando y falta:', error);
+        }
+    }
+
+    // Función para calcular el equivalente en dólares cuando se ingresa un monto en bolívares
+    async function calcularEquivalenteDesdeBs() {
+        try {
+            const totalBs = window.transaccionesModule.totalTransaccionBs || 0;
+            const totalDolares = window.transaccionesModule.totalTransaccionDolares || 0;
+            
+            const pagadoBsInput = document.getElementById('cerrar-pagado-bs');
+            const pagadoDolaresInput = document.getElementById('cerrar-pagado-dolares');
+            
+            if (!pagadoBsInput || !pagadoDolaresInput) return;
+            
+            const valorBs = pagadoBsInput.value || '';
+            if (!valorBs || valorBs.trim() === '') {
+                return;
+            }
+            
+            // Obtener valor numérico
+            let pagadoBs = 0;
+            if (typeof window.obtenerValorNumerico === 'function' && pagadoBsInput._formateadoPrecio) {
+                try {
+                    pagadoBs = window.obtenerValorNumerico(valorBs) || 0;
+                } catch (e) {
+                    pagadoBs = parseFloat(valorBs.replace(/[^\d.]/g, '')) || 0;
+                }
+            } else {
+                pagadoBs = parseFloat(valorBs.replace(/[^\d.]/g, '')) || 0;
+            }
+            
+            // Calcular cuánto falta en bolívares
+            const faltaBs = Math.max(0, totalBs - pagadoBs);
+            
+            // Obtener tasa de cambio del día
+            const fechaHoy = new Date();
+            const dia = String(fechaHoy.getDate()).padStart(2, '0');
+            const mes = String(fechaHoy.getMonth() + 1).padStart(2, '0');
+            const año = fechaHoy.getFullYear();
+            const fechaFormato = `${dia}/${mes}/${año}`;
+            
+            const tasa = await window.electronAPI.dbGet(
+                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+                [fechaFormato]
+            );
+            
+            if (tasa && tasa.tasa_bs_por_dolar > 0) {
+                // Calcular cuánto falta en dólares: faltaBs / tasa
+                const faltaDolaresCalculado = faltaBs / parseFloat(tasa.tasa_bs_por_dolar);
+                // El monto a pagar en dólares es: totalDolares - (lo que ya se pagó en dólares) + el equivalente de lo que falta en Bs
+                // Pero como queremos que ambos montos cubran el total, calculamos: totalDolares - (faltaBs / tasa)
+                // Pero mejor: si falta X Bs, entonces falta X/tasa en dólares, así que debe pagar totalDolares - (faltaBs/tasa)
+                const pagadoDolaresNecesario = Math.max(0, totalDolares - faltaDolaresCalculado);
+                
+                // Actualizar el campo de dólares solo si el usuario no lo está editando
+                if (document.activeElement !== pagadoDolaresInput) {
+                    if (typeof window.obtenerValorNumerico === 'function' && pagadoDolaresInput._formateadoPrecio) {
+                        const valorFormateado = pagadoDolaresNecesario.toFixed(2).padStart(6, '0').replace(/(\d{3})(\d{2})/, '$1.$2');
+                        pagadoDolaresInput.value = valorFormateado;
+                    } else {
+                        pagadoDolaresInput.value = pagadoDolaresNecesario.toFixed(2);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error al calcular equivalente desde Bs:', error);
+        }
+    }
+
+    // Función para calcular el equivalente en bolívares cuando se ingresa un monto en dólares
+    async function calcularEquivalenteDesdeDolares() {
+        try {
+            const totalBs = window.transaccionesModule.totalTransaccionBs || 0;
+            const totalDolares = window.transaccionesModule.totalTransaccionDolares || 0;
+            
+            const pagadoBsInput = document.getElementById('cerrar-pagado-bs');
+            const pagadoDolaresInput = document.getElementById('cerrar-pagado-dolares');
+            
+            if (!pagadoBsInput || !pagadoDolaresInput) return;
+            
+            const valorDolares = pagadoDolaresInput.value || '';
+            if (!valorDolares || valorDolares.trim() === '') {
+                return;
+            }
+            
+            // Obtener valor numérico
+            let pagadoDolares = 0;
+            if (typeof window.obtenerValorNumerico === 'function' && pagadoDolaresInput._formateadoPrecio) {
+                try {
+                    pagadoDolares = window.obtenerValorNumerico(valorDolares) || 0;
+                } catch (e) {
+                    pagadoDolares = parseFloat(valorDolares.replace(/[^\d.]/g, '')) || 0;
+                }
+            } else {
+                pagadoDolares = parseFloat(valorDolares.replace(/[^\d.]/g, '')) || 0;
+            }
+            
+            // Calcular cuánto falta en dólares
+            const faltaDolares = Math.max(0, totalDolares - pagadoDolares);
+            
+            // Obtener tasa de cambio del día
+            const fechaHoy = new Date();
+            const dia = String(fechaHoy.getDate()).padStart(2, '0');
+            const mes = String(fechaHoy.getMonth() + 1).padStart(2, '0');
+            const año = fechaHoy.getFullYear();
+            const fechaFormato = `${dia}/${mes}/${año}`;
+            
+            const tasa = await window.electronAPI.dbGet(
+                'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+                [fechaFormato]
+            );
+            
+            if (tasa && tasa.tasa_bs_por_dolar > 0) {
+                // Calcular cuánto falta en bolívares: faltaDolares * tasa
+                const faltaBsCalculado = faltaDolares * parseFloat(tasa.tasa_bs_por_dolar);
+                // El monto a pagar en bolívares es: totalBs - faltaBsCalculado
+                const pagadoBsNecesario = Math.max(0, totalBs - faltaBsCalculado);
+                
+                // Actualizar el campo de bolívares solo si el usuario no lo está editando
+                if (document.activeElement !== pagadoBsInput) {
+                    if (typeof window.obtenerValorNumerico === 'function' && pagadoBsInput._formateadoPrecio) {
+                        const valorFormateado = pagadoBsNecesario.toFixed(2).padStart(6, '0').replace(/(\d{3})(\d{2})/, '$1.$2');
+                        pagadoBsInput.value = valorFormateado;
+                    } else {
+                        pagadoBsInput.value = pagadoBsNecesario.toFixed(2);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error al calcular equivalente desde dólares:', error);
         }
     }
 
@@ -2307,7 +2638,10 @@
             return;
         }
         
-        // Calcular totales
+        // Asegurar que los totales estén actualizados antes de guardar
+        await actualizarTotalGeneral();
+        
+        // Calcular totales - usar los valores que actualizarTotalGeneral() ya calculó correctamente
         const totalGeneralInput = document.getElementById('transaccion-total-general');
         const totalGeneralDolaresInput = document.getElementById('transaccion-total-general-dolares');
         const totalBs = parseFloat(totalGeneralInput.value.replace(/[^\d.]/g, '')) || 0;
@@ -2318,8 +2652,7 @@
         const pagadoBs = 0;
         const pagadoDolares = 0;
         
-        // Total en dólares ya está calculado correctamente en actualizarTotalGeneral()
-        // Incluye: (total en bolívares / tasa de cambio) + propinas en dólares
+        // Total en dólares ya está calculado correctamente por actualizarTotalGeneral()
         const totalDolaresFinal = totalDolares;
 
         // Generar resúmenes
@@ -2514,12 +2847,22 @@
             transaccionEditando = transaccion;
             document.getElementById('cerrar-transaccion-id').value = transaccion.id;
             
+            // Guardar totales para calcular "falta por pagar"
+            const totalBs = parseFloat(transaccion.total_en_bs || 0);
+            const totalDolares = parseFloat(transaccion.total_en_dolares || 0);
+            window.transaccionesModule.totalTransaccionBs = totalBs;
+            window.transaccionesModule.totalTransaccionDolares = totalDolares;
+            
+            // Debug: mostrar valores en consola
+            console.log('[Cerrar Transacción] Total Bs:', totalBs, 'Total $:', totalDolares);
+            
             // Llenar resumen
             const resumen = document.getElementById('resumen-transaccion');
             if (resumen) {
+                const totalDolaresDisplay = totalDolares > 0 ? `$${totalDolares.toFixed(2)}` : '$0.00';
                 resumen.innerHTML = `
                     <p><strong>Cliente:</strong> ${transaccion.nombre_cliente}</p>
-                    <p><strong>Total:</strong> ${parseFloat(transaccion.total_en_bs || 0).toFixed(2)} Bs / $${parseFloat(transaccion.total_en_dolares || 0).toFixed(2)}</p>
+                    <p><strong>Total:</strong> ${totalBs.toFixed(2)} Bs / ${totalDolaresDisplay}</p>
                     <p><strong>Servicios:</strong> ${transaccion.servicios_consumidos || 'Ninguno'}</p>
                     <p><strong>Productos:</strong> ${transaccion.productos_comprados_nombres || 'Ninguno'}</p>
                 `;
@@ -2546,24 +2889,79 @@
             // Limpiar campos de cantidad pagada
             const pagadoBsInput = document.getElementById('cerrar-pagado-bs');
             const pagadoDolaresInput = document.getElementById('cerrar-pagado-dolares');
+            
             if (pagadoBsInput) {
-                pagadoBsInput.value = '';
-                // Aplicar formateo si está disponible
-                setTimeout(() => {
-                    if (typeof formatearInputPrecio === 'function' && !pagadoBsInput._formateadoPrecio) {
-                        formatearInputPrecio(pagadoBsInput);
-                    }
-                }, 100);
+                // Si hay total en bolívares, llenar automáticamente el campo
+                if (totalBs > 0) {
+                    // Limpiar primero
+                    pagadoBsInput.value = '';
+                    // Aplicar formateo si está disponible
+                    setTimeout(() => {
+                        if (typeof formatearInputPrecio === 'function' && !pagadoBsInput._formateadoPrecio) {
+                            formatearInputPrecio(pagadoBsInput);
+                        }
+                        // Llenar con el total después de aplicar formateo
+                        setTimeout(() => {
+                            if (typeof window.obtenerValorNumerico === 'function' && pagadoBsInput._formateadoPrecio) {
+                                // Formato automático
+                                const valorFormateado = totalBs.toFixed(2).padStart(6, '0').replace(/(\d{3})(\d{2})/, '$1.$2');
+                                pagadoBsInput.value = valorFormateado;
+                            } else {
+                                pagadoBsInput.value = totalBs.toFixed(2);
+                            }
+                            // Actualizar campos de "pagando" y "falta por pagar" después de llenar
+                            actualizarPagandoYFalta();
+                        }, 50);
+                    }, 100);
+                } else {
+                    pagadoBsInput.value = '';
+                    // Aplicar formateo si está disponible
+                    setTimeout(() => {
+                        if (typeof formatearInputPrecio === 'function' && !pagadoBsInput._formateadoPrecio) {
+                            formatearInputPrecio(pagadoBsInput);
+                        }
+                    }, 100);
+                }
+                // Añadir event listener solo para actualizar "pagando" y "falta por pagar"
+                // NO calcular automáticamente el equivalente porque los campos son independientes para pagos mixtos
+                pagadoBsInput.removeEventListener('input', actualizarPagandoYFalta);
+                pagadoBsInput.addEventListener('input', actualizarPagandoYFalta);
             }
+            
             if (pagadoDolaresInput) {
+                // Siempre llenar el campo con el total en dólares (incluso si es 0)
                 pagadoDolaresInput.value = '';
                 // Aplicar formateo si está disponible
                 setTimeout(() => {
                     if (typeof formatearInputPrecio === 'function' && !pagadoDolaresInput._formateadoPrecio) {
                         formatearInputPrecio(pagadoDolaresInput);
                     }
+                    // Llenar con el total después de aplicar formateo
+                    setTimeout(() => {
+                        if (totalDolares > 0 || totalDolares === 0) {
+                            // Siempre mostrar el valor, incluso si es 0
+                            if (typeof window.obtenerValorNumerico === 'function' && pagadoDolaresInput._formateadoPrecio) {
+                                // Formato automático
+                                const valorFormateado = totalDolares.toFixed(2).padStart(6, '0').replace(/(\d{3})(\d{2})/, '$1.$2');
+                                pagadoDolaresInput.value = valorFormateado;
+                            } else {
+                                pagadoDolaresInput.value = totalDolares.toFixed(2);
+                            }
+                        }
+                        // Actualizar campos de "pagando" y "falta por pagar" después de llenar
+                        actualizarPagandoYFalta();
+                    }, 50);
                 }, 100);
+                // Añadir event listener solo para actualizar "pagando" y "falta por pagar"
+                // NO calcular automáticamente el equivalente porque los campos son independientes para pagos mixtos
+                pagadoDolaresInput.removeEventListener('input', actualizarPagandoYFalta);
+                pagadoDolaresInput.addEventListener('input', actualizarPagandoYFalta);
             }
+            
+            // Inicializar campos de "pagando" y "falta por pagar" después de un pequeño delay
+            setTimeout(() => {
+                actualizarPagandoYFalta();
+            }, 300);
             
             document.getElementById('cerrar-transaccion-modal').classList.add('active');
         } catch (error) {
@@ -2876,6 +3274,95 @@
                 [fechaCierreStr, 'cerrada', metodosPagoStr, entidadesPagoStr, numeroReferencia || null, tasaCambio, pagadoBs, pagadoDolares, id]
             );
 
+            // Determinar cómo se pagó la transacción
+            const sePagoSoloEnBs = !esPagoMixto && pagadoBs > 0 && pagadoDolares === 0;
+            const sePagoSoloEnDolares = !esPagoMixto && pagadoDolares > 0 && pagadoBs === 0;
+            
+            // Si es pago mixto, actualizar cada servicio individual con su parte del pago
+            if (esPagoMixto && (pagadoBs > 0 || pagadoDolares > 0)) {
+                // Obtener todos los servicios de la transacción (sin propinas independientes)
+                const serviciosTransaccion = await window.electronAPI.dbQuery(`
+                    SELECT id, precio_cobrado
+                    FROM ServiciosRealizados
+                    WHERE id_transaccion = ? 
+                    AND estado = 'completado'
+                    AND id_servicio IS NOT NULL 
+                    AND id_servicio != 0
+                `, [id]);
+                
+                // Obtener todos los productos de la transacción
+                const productosTransaccion = await window.electronAPI.dbQuery(`
+                    SELECT precio_total
+                    FROM ProductosVendidos
+                    WHERE id_transaccion = ?
+                `, [id]);
+                
+                // Obtener el total de propinas en Bs y dólares (incluyendo propinas independientes)
+                const propinasInfo = await window.electronAPI.dbGet(`
+                    SELECT 
+                        COALESCE(SUM(propina), 0) as total_propinas_bs,
+                        COALESCE(SUM(propina_en_dolares), 0) as total_propinas_dolares
+                    FROM ServiciosRealizados
+                    WHERE id_transaccion = ? 
+                    AND estado = 'completado'
+                `, [id]);
+                
+                const totalPropinasBs = parseFloat(propinasInfo?.total_propinas_bs || 0);
+                const totalPropinasDolares = parseFloat(propinasInfo?.total_propinas_dolares || 0);
+                
+                // Calcular el total de servicios y productos (sin propinas)
+                const totalServiciosBs = serviciosTransaccion.reduce((sum, s) => sum + parseFloat(s.precio_cobrado || 0), 0);
+                const totalProductosBs = productosTransaccion.reduce((sum, p) => sum + parseFloat(p.precio_total || 0), 0);
+                const totalServiciosYProductosBs = totalServiciosBs + totalProductosBs;
+                
+                // IMPORTANTE: Restar las propinas del pago total antes de distribuir
+                // El pago total incluye servicios/productos + propinas, pero solo debemos distribuir la parte de servicios/productos
+                const pagadoBsParaServicios = pagadoBs - totalPropinasBs;
+                const pagadoDolaresParaServicios = pagadoDolares - totalPropinasDolares;
+                
+                // Si hay servicios/productos, distribuir el pago proporcionalmente (solo la parte de servicios, sin propinas)
+                if (totalServiciosYProductosBs > 0) {
+                    for (const servicio of serviciosTransaccion) {
+                        const precioServicioBs = parseFloat(servicio.precio_cobrado || 0);
+                        const proporcionServicio = precioServicioBs / totalServiciosYProductosBs;
+                        
+                        // Calcular la parte del pago que corresponde a este servicio (solo servicios, sin propinas)
+                        const partePagadaBs = pagadoBsParaServicios * proporcionServicio;
+                        const partePagadaDolares = pagadoDolaresParaServicios * proporcionServicio;
+                        
+                        // Actualizar el servicio con su parte del pago
+                        await window.electronAPI.dbRun(
+                            `UPDATE ServiciosRealizados 
+                            SET pagado_bs = ?, pagado_dolares = ? 
+                            WHERE id = ?`,
+                            [partePagadaBs, partePagadaDolares, servicio.id]
+                        );
+                    }
+                }
+            } else if (sePagoSoloEnBs && pagadoBs > 0) {
+                // Si se pagó solo en bolívares, todos los servicios se pagaron completamente en Bs
+                await window.electronAPI.dbRun(
+                    `UPDATE ServiciosRealizados 
+                    SET pagado_bs = precio_cobrado, pagado_dolares = 0 
+                    WHERE id_transaccion = ? 
+                    AND estado = 'completado'
+                    AND id_servicio IS NOT NULL 
+                    AND id_servicio != 0`,
+                    [id]
+                );
+            } else if (sePagoSoloEnDolares && pagadoDolares > 0) {
+                // Si se pagó solo en dólares, todos los servicios se pagaron completamente en dólares
+                await window.electronAPI.dbRun(
+                    `UPDATE ServiciosRealizados 
+                    SET pagado_bs = 0, pagado_dolares = precio_cobrado 
+                    WHERE id_transaccion = ? 
+                    AND estado = 'completado'
+                    AND id_servicio IS NOT NULL 
+                    AND id_servicio != 0`,
+                    [id]
+                );
+            }
+
             cerrarModalCerrar();
             await cargarDatos();
             mostrarExito('Transacción cerrada correctamente');
@@ -3137,6 +3624,37 @@
                 return;
             }
 
+            // Obtener tasa de cambio del día de la transacción
+            let tasaCambio = null;
+            try {
+                // Extraer fecha de la transacción
+                const fechaTransaccion = transaccion.fecha_apertura;
+                let fechaFormato = null;
+                if (fechaTransaccion) {
+                    // Si está en formato DD/MM/YYYY HH:MM:SS, extraer solo la fecha
+                    if (fechaTransaccion.includes('/')) {
+                        fechaFormato = fechaTransaccion.split(' ')[0]; // Tomar solo DD/MM/YYYY
+                    } else if (fechaTransaccion.includes('-')) {
+                        // Si está en formato ISO, convertir a DD/MM/YYYY
+                        const fechaISO = fechaTransaccion.split('T')[0] || fechaTransaccion.split(' ')[0];
+                        const [year, month, day] = fechaISO.split('-');
+                        fechaFormato = `${day}/${month}/${year}`;
+                    }
+                }
+                
+                if (fechaFormato) {
+                    const tasa = await window.electronAPI.dbGet(
+                        'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
+                        [fechaFormato]
+                    );
+                    if (tasa && tasa.tasa_bs_por_dolar > 0) {
+                        tasaCambio = parseFloat(tasa.tasa_bs_por_dolar);
+                    }
+                }
+            } catch (error) {
+                console.error('Error al obtener tasa de cambio:', error);
+            }
+
             // Obtener servicios realizados
             const serviciosRealizados = await window.electronAPI.dbQuery(`
                 SELECT 
@@ -3194,14 +3712,22 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${serviciosRealizados.map(s => `
+                                ${serviciosRealizados.map(s => {
+                                    const precioBs = parseFloat(s.precio_cobrado || 0);
+                                    const precioDolares = tasaCambio && tasaCambio > 0 ? precioBs / tasaCambio : 0;
+                                    const propinaBs = parseFloat(s.propina || 0);
+                                    const propinaDolares = parseFloat(s.propina_en_dolares || 0);
+                                    const propinaDolaresCalculada = tasaCambio && tasaCambio > 0 && propinaDolares === 0 ? propinaBs / tasaCambio : propinaDolares;
+                                    
+                                    return `
                                     <tr style="border-bottom: 1px solid var(--border-color);">
                                         <td style="padding: 8px;">${s.nombre_servicio}</td>
                                         <td style="padding: 8px;">${s.nombre_empleado}</td>
-                                        <td style="text-align: right; padding: 8px;">${parseFloat(s.precio_cobrado).toFixed(2)} Bs</td>
-                                        <td style="text-align: right; padding: 8px;">${parseFloat(s.propina || 0).toFixed(2)} Bs</td>
+                                        <td style="text-align: right; padding: 8px;">${precioBs.toFixed(2)} Bs${transaccion.estado === 'cerrada' && precioDolares > 0 ? ` / $${precioDolares.toFixed(2)}` : ''}</td>
+                                        <td style="text-align: right; padding: 8px;">${propinaBs > 0 ? `${propinaBs.toFixed(2)} Bs` : ''}${propinaDolaresCalculada > 0 ? (propinaBs > 0 ? ' / ' : '') + `$${propinaDolaresCalculada.toFixed(2)}` : ''}</td>
                                     </tr>
-                                `).join('')}
+                                `;
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -3220,14 +3746,21 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${productosVendidos.map(p => `
+                                ${productosVendidos.map(p => {
+                                    const precioUnitarioBs = parseFloat(p.precio_unitario || 0);
+                                    const precioTotalBs = parseFloat(p.precio_total || 0);
+                                    const precioUnitarioDolares = tasaCambio && tasaCambio > 0 ? precioUnitarioBs / tasaCambio : 0;
+                                    const precioTotalDolares = tasaCambio && tasaCambio > 0 ? precioTotalBs / tasaCambio : 0;
+                                    
+                                    return `
                                     <tr style="border-bottom: 1px solid var(--border-color);">
                                         <td style="padding: 8px;">${p.nombre_producto}</td>
                                         <td style="text-align: right; padding: 8px;">${p.cantidad}</td>
-                                        <td style="text-align: right; padding: 8px;">${parseFloat(p.precio_unitario).toFixed(2)} Bs</td>
-                                        <td style="text-align: right; padding: 8px;"><strong>${parseFloat(p.precio_total).toFixed(2)} Bs</strong></td>
+                                        <td style="text-align: right; padding: 8px;">${precioUnitarioBs.toFixed(2)} Bs${transaccion.estado === 'cerrada' && precioUnitarioDolares > 0 ? ` / $${precioUnitarioDolares.toFixed(2)}` : ''}</td>
+                                        <td style="text-align: right; padding: 8px;"><strong>${precioTotalBs.toFixed(2)} Bs${transaccion.estado === 'cerrada' && precioTotalDolares > 0 ? ` / $${precioTotalDolares.toFixed(2)}` : ''}</strong></td>
                                     </tr>
-                                `).join('')}
+                                `;
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>

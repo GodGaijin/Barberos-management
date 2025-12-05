@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   login: (username, password) => ipcRenderer.invoke('auth-login', username, password),
   // Window events
   on: (channel, callback) => {
-    const validChannels = ['window-focused'];
+    const validChannels = ['window-focused', 'reprogramar-actualizaciones'];
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args));
     }
@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // Reprogramar
   reprogramarRespaldos: () => ipcRenderer.send('reprogramar-respaldos'),
-  reprogramarReportes: () => ipcRenderer.send('reprogramar-reportes')
+  reprogramarReportes: () => ipcRenderer.send('reprogramar-reportes'),
+  reprogramarActualizaciones: () => ipcRenderer.send('reprogramar-actualizaciones')
 });
 

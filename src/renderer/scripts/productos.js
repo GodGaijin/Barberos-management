@@ -24,20 +24,18 @@
     let productosFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
+    // Inicializa el módulo de productos cuando se carga la página
     window.initProductos = function() {
-        console.log('initProductos llamado');
         // Siempre reconfigurar los event listeners porque el DOM se recrea al navegar
         // Pequeño delay para asegurar que el DOM esté completamente cargado
         setTimeout(() => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando productos...');
                 cargarProductos();
                 window.productosModule.initialized = true;
-                console.log('Productos inicializados correctamente');
+                console.log('✅ Módulo de productos inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar productos:', error);
+                console.error('❌ Error al inicializar productos:', error);
                 const tbody = document.getElementById('productos-table-body');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="6" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
@@ -150,7 +148,7 @@
     // Cargar productos desde la base de datos
     async function cargarProductos() {
         try {
-            console.log('Iniciando carga de productos...');
+            // Obtiene todos los productos de la base de datos
             const tbody = document.getElementById('productos-table-body');
             if (tbody) {
                 tbody.innerHTML = '<tr><td colspan="6" class="loading">Cargando productos...</td></tr>';
@@ -161,10 +159,10 @@
                 throw new Error('electronAPI no está disponible');
             }
             
-            console.log('Consultando base de datos...');
-            // Ordenar alfabéticamente por nombre
+            // Consultar todos los productos ordenados por nombre
             const resultados = await window.electronAPI.dbQuery('SELECT * FROM Productos ORDER BY nombre ASC');
-            console.log('Productos obtenidos:', resultados);
+            
+            console.log(`📦 Productos cargados: ${resultados?.length || 0} registros`);
             
             window.productosModule.productos = resultados || [];
             // Actualizar referencia local
@@ -455,9 +453,6 @@
                 nombreInput.select();
                 
                 // Verificación adicional: intentar escribir en el campo
-                console.log('Campo nombre editable:', !nombreInput.disabled && !nombreInput.readOnly && nombreInput.style.pointerEvents !== 'none');
-                console.log('Campo cantidad editable:', !cantidadInput.disabled && !cantidadInput.readOnly && cantidadInput.style.pointerEvents !== 'none');
-                console.log('Campo precio editable:', !precioDolaresInput.disabled && !precioDolaresInput.readOnly && precioDolaresInput.style.pointerEvents !== 'none');
             }, 150);
         } catch (error) {
             console.error('Error al cargar producto:', error);

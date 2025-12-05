@@ -1,11 +1,13 @@
-# Dependencies
+# Dependencias
 node_modules/
 package-lock.json
 
-# Build outputs
+# Archivos de compilación
 dist/
 build/
 out/
+
+# Ejecutables y paquetes
 *.exe
 *.exe.blockmap
 *.dmg
@@ -26,14 +28,14 @@ latest.yml
 builder-debug.yml
 builder-effective-config.yaml
 
-# Database files (user data - should not be in repo)
+# Base de datos (datos del usuario - no deben estar en el repositorio)
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
 
-# Migration files and test databases
+# Archivos de migración y bases de datos de prueba
 database/for-migration/*.db
 database/for-migration/*.sqlite
 database/for-migration/*.sqlite3
@@ -47,7 +49,7 @@ yarn-error.log*
 lerna-debug.log*
 electron-log*.log
 
-# Environment variables and secrets
+# Variables de entorno y secretos
 .env
 .env.local
 .env.*.local
@@ -62,7 +64,7 @@ electron-log*.log
 GITHUB_TOKEN
 *.token
 
-# OS files
+# Archivos del sistema operativo
 .DS_Store
 .DS_Store?
 ._*
@@ -73,7 +75,7 @@ Thumbs.db
 desktop.ini
 $RECYCLE.BIN/
 
-# IDE
+# Configuración de IDE
 .vscode/
 .idea/
 *.swp
@@ -85,14 +87,14 @@ $RECYCLE.BIN/
 *.sublime-project
 *.sublime-workspace
 
-# Temporary files
+# Archivos temporales
 *.tmp
 *.temp
 *.cache
 .cache/
 .temp/
 
-# Test coverage
+# Cobertura de pruebas
 coverage/
 .nyc_output/
 *.lcov
@@ -100,41 +102,20 @@ coverage/
 # Electron rebuild
 .electron-rebuild/
 
-# Debug
-.vscode-test/
-.vscode/launch.json
-.vscode/settings.json
-
-# User data directories (Electron app data)
+# Directorios de datos de usuario (datos de la aplicación Electron)
 AppData/
 Local/
 Roaming/
 
-# Backup files
+# Archivos de respaldo
 *.bak
 *.backup
-*~
 
-# Package manager lock files (keep package-lock.json for consistency)
-# package-lock.json  # Comentado - algunos proyectos lo incluyen
-
-# Electron specific
-app-update.yml
-latest.yml
-*.blockmap
-*.dmg
-*.pkg
-*.deb
-*.rpm
-*.AppImage
-*.snap
-*.nupkg
-
-# Windows specific
+# Archivos específicos de Windows
 *.lnk
 *.url
 
-# Documentation files (keep important ones)
+# Documentación (mantener solo los importantes)
 *.md
 !README.md
 !COMPILACION.md

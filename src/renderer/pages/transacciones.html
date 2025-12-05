@@ -32,6 +32,7 @@
                     <th>Fecha Apertura</th>
                     <th>Fecha Cierre</th>
                     <th>Total (Bs)</th>
+                    <th>Total ($)</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
@@ -229,6 +230,48 @@
                     <label for="cerrar-pagado-dolares">Cantidad Pagada ($)</label>
                     <input type="text" id="cerrar-pagado-dolares" name="pagado_dolares" placeholder="000.00" inputmode="decimal" style="text-align: right; direction: rtl;">
                     <small style="color: var(--text-secondary); font-size: 12px; display: block; margin-top: 5px;">Formato automático de derecha a izquierda</small>
+                </div>
+            </div>
+
+            <!-- Campos para mostrar lo que se está pagando y lo que falta -->
+            <div class="form-row" style="margin-top: 15px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Pagando (Bs)</label>
+                    <div id="cerrar-pagando-bs" style="background: var(--bg-secondary); padding: 10px; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: right; color: var(--text-primary);">
+                        0.00 Bs
+                    </div>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Falta por Pagar (Bs)</label>
+                    <div id="cerrar-falta-bs" style="background: var(--bg-secondary); padding: 10px; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: right; color: var(--text-primary);">
+                        0.00 Bs
+                    </div>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Exceso/Cambio (Bs)</label>
+                    <div id="cerrar-exceso-bs" style="background: var(--bg-secondary); padding: 10px; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: right; color: var(--text-primary); display: none;">
+                        0.00 Bs
+                    </div>
+                </div>
+            </div>
+            <div class="form-row" style="margin-top: 10px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Pagando ($)</label>
+                    <div id="cerrar-pagando-dolares" style="background: var(--bg-secondary); padding: 10px; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: right; color: var(--text-primary);">
+                        $0.00
+                    </div>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Falta por Pagar ($)</label>
+                    <div id="cerrar-falta-dolares" style="background: var(--bg-secondary); padding: 10px; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: right; color: var(--text-primary);">
+                        $0.00
+                    </div>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Exceso/Cambio ($)</label>
+                    <div id="cerrar-exceso-dolares" style="background: var(--bg-secondary); padding: 10px; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: right; color: var(--text-primary); display: none;">
+                        $0.00
+                    </div>
                 </div>
             </div>
 

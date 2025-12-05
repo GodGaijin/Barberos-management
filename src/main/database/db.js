@@ -505,6 +505,31 @@ class DB {
           }
         }
         
+        // Verificar si faltan los campos pagado_bs y pagado_dolares (para saber cómo se pagó cada servicio)
+        if (!sql.includes('pagado_bs')) {
+          console.log('Agregando campos pagado_bs y pagado_dolares a ServiciosRealizados...');
+          
+          try {
+            this.db.exec('ALTER TABLE ServiciosRealizados ADD COLUMN pagado_bs REAL DEFAULT 0;');
+            console.log('Columna pagado_bs agregada a ServiciosRealizados');
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar pagado_bs:', e);
+            }
+          }
+        }
+        
+        if (!sql.includes('pagado_dolares')) {
+          try {
+            this.db.exec('ALTER TABLE ServiciosRealizados ADD COLUMN pagado_dolares REAL DEFAULT 0;');
+            console.log('Columna pagado_dolares agregada a ServiciosRealizados');
+          } catch (e) {
+            if (!e.message.includes('duplicate column')) {
+              console.error('Error al agregar pagado_dolares:', e);
+            }
+          }
+        }
+        
         // Verificar si id_servicio permite NULL (necesario para propinas independientes)
         // Si tiene NOT NULL, necesitamos recrear la tabla sin esa restricción
         if (sql.includes('id_servicio INTEGER NOT NULL')) {

@@ -24,20 +24,18 @@
     let serviciosFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
+    // Inicializa el módulo de servicios cuando se carga la página
     window.initServicios = function() {
-        console.log('initServicios llamado');
         // Siempre reconfigurar los event listeners porque el DOM se recrea al navegar
         // Pequeño delay para asegurar que el DOM esté completamente cargado
         setTimeout(() => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando servicios...');
                 cargarServicios();
                 window.serviciosModule.initialized = true;
-                console.log('Servicios inicializados correctamente');
+                console.log('✅ Módulo de servicios inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar servicios:', error);
+                console.error('❌ Error al inicializar servicios:', error);
                 const tbody = document.getElementById('servicios-table-body');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="6" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
@@ -139,7 +137,7 @@
     // Cargar servicios desde la base de datos
     async function cargarServicios() {
         try {
-            console.log('Iniciando carga de servicios...');
+            // Obtiene todos los servicios de la base de datos
             const tbody = document.getElementById('servicios-table-body');
             if (tbody) {
                 tbody.innerHTML = '<tr><td colspan="6" class="loading">Cargando servicios...</td></tr>';
@@ -150,10 +148,10 @@
                 throw new Error('electronAPI no está disponible');
             }
             
-            console.log('Consultando base de datos...');
-            // Ordenar alfabéticamente por nombre
+            // Consultar todos los servicios ordenados por nombre
             const resultados = await window.electronAPI.dbQuery('SELECT * FROM Servicios ORDER BY nombre ASC');
-            console.log('Servicios obtenidos:', resultados);
+            
+            console.log(`✂️ Servicios cargados: ${resultados?.length || 0} registros`);
             
             window.serviciosModule.servicios = resultados || [];
             // Actualizar referencia local
@@ -436,9 +434,6 @@
                 nombreInput.select();
                 
                 // Verificación adicional: intentar escribir en el campo
-                console.log('Campo nombre editable:', !nombreInput.disabled && !nombreInput.readOnly && nombreInput.style.pointerEvents !== 'none');
-                console.log('Campo descripción editable:', !descripcionInput.disabled && !descripcionInput.readOnly && descripcionInput.style.pointerEvents !== 'none');
-                console.log('Campo precio editable:', !precioDolaresInput.disabled && !precioDolaresInput.readOnly && precioDolaresInput.style.pointerEvents !== 'none');
             }, 150);
         } catch (error) {
             console.error('Error al cargar servicio:', error);

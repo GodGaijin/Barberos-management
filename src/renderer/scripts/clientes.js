@@ -24,20 +24,18 @@
     let clientesFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
+    // Inicializa el módulo de clientes cuando se carga la página
     window.initClientes = function() {
-        console.log('initClientes llamado');
         // Siempre reconfigurar los event listeners porque el DOM se recrea al navegar
         // Pequeño delay para asegurar que el DOM esté completamente cargado
         setTimeout(() => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando clientes...');
                 cargarClientes();
                 window.clientesModule.initialized = true;
-                console.log('Clientes inicializados correctamente');
+                console.log('✅ Módulo de clientes inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar clientes:', error);
+                console.error('❌ Error al inicializar clientes:', error);
                 const tbody = document.getElementById('clientes-table-body');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="6" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
@@ -346,7 +344,6 @@
                 // Forzar focus y selección para verificar que es editable
                 nombreInput.focus();
                 nombreInput.select();
-                console.log('Campo nombre editable:', !nombreInput.disabled && !nombreInput.readOnly && nombreInput.style.pointerEvents !== 'none');
             }, 150);
         } catch (error) {
             console.error('Error al cargar cliente:', error);

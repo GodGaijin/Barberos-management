@@ -21,19 +21,17 @@
     var initialized = window.citasModule.initialized;
 
     // Inicialización - función exportada para ser llamada desde main.js
+    // Inicializa el módulo de citas cuando se carga la página
     window.initCitas = async function() {
-        console.log('initCitas llamado');
         setTimeout(async () => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando datos...');
                 await cargarClientes();
                 await cargarCitas();
                 window.citasModule.initialized = true;
-                console.log('Citas inicializadas correctamente');
+                console.log('✅ Módulo de citas inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar citas:', error);
+                console.error('❌ Error al inicializar citas:', error);
                 const tbody = document.getElementById('citas-table-body');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="6" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
@@ -342,7 +340,6 @@
     // Cargar citas desde la base de datos
     async function cargarCitas() {
         try {
-            console.log('Iniciando carga de citas...');
             const tbody = document.getElementById('citas-table-body');
             if (tbody) {
                 tbody.innerHTML = '<tr><td colspan="6" class="loading">Cargando citas...</td></tr>';

@@ -24,20 +24,18 @@
     let empleadosFiltrados = [];
 
     // Inicialización - función exportada para ser llamada desde main.js
+    // Inicializa el módulo de empleados cuando se carga la página
     window.initEmpleados = function() {
-        console.log('initEmpleados llamado');
         // Siempre reconfigurar los event listeners porque el DOM se recrea al navegar
         // Pequeño delay para asegurar que el DOM esté completamente cargado
         setTimeout(() => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando empleados...');
                 cargarEmpleados();
                 window.empleadosModule.initialized = true;
-                console.log('Empleados inicializados correctamente');
+                console.log('✅ Módulo de empleados inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar empleados:', error);
+                console.error('❌ Error al inicializar empleados:', error);
                 const tbody = document.getElementById('empleados-table-body');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="7" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
@@ -147,7 +145,7 @@
     // Cargar empleados desde la base de datos
     async function cargarEmpleados() {
         try {
-            console.log('Iniciando carga de empleados...');
+            // Obtiene todos los empleados de la base de datos
             const tbody = document.getElementById('empleados-table-body');
             if (tbody) {
                 tbody.innerHTML = '<tr><td colspan="7" class="loading">Cargando empleados...</td></tr>';
@@ -158,10 +156,10 @@
                 throw new Error('electronAPI no está disponible');
             }
             
-            console.log('Consultando base de datos...');
-            // Ordenar alfabéticamente por nombre y apellido
+            // Consultar todos los empleados ordenados por nombre y apellido
             const resultados = await window.electronAPI.dbQuery('SELECT * FROM Empleados ORDER BY nombre ASC, apellido ASC');
-            console.log('Empleados obtenidos:', resultados);
+            
+            console.log(`👥 Empleados cargados: ${resultados?.length || 0} registros`);
             
             window.empleadosModule.empleados = resultados || [];
             // Actualizar referencia local

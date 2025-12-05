@@ -4,19 +4,15 @@
     let initialized = false;
 
     // Función de inicialización
+    // Inicializa el módulo del dashboard cuando se carga la página
     window.initDashboard = function() {
-        console.log('Inicializando Dashboard...');
-        
         // Event listeners - usar setTimeout para asegurar que el DOM esté listo
         setTimeout(() => {
             const refreshBtn = document.getElementById('refresh-dashboard');
             if (refreshBtn) {
                 refreshBtn.onclick = () => {
-                    console.log('Botón actualizar clickeado');
                     cargarDashboard();
                 };
-            } else {
-                console.warn('Botón refresh-dashboard no encontrado');
             }
 
             // Configurar event listeners para modales de productos sin stock
@@ -69,7 +65,6 @@
                             if (page && window.navigateToPage) {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                console.log('Navegando a:', page);
                                 window.navigateToPage(page);
                                 return;
                             }
@@ -86,7 +81,6 @@
                     if (page && window.navigateToPage) {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('Navegando a:', page);
                         window.navigateToPage(page);
                     }
                 };

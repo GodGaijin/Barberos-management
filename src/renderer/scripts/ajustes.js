@@ -17,9 +17,8 @@
     var initialized = window.ajustesModule.initialized;
 
     // Inicialización - función exportada para ser llamada desde main.js
+    // Inicializa el módulo de ajustes cuando se carga la página
     window.initAjustes = function() {
-        console.log('initAjustes llamado');
-        
         // Siempre reconfigurar los event listeners porque el DOM se recrea al navegar
         // Usar un delay más largo para asegurar que el DOM esté completamente cargado
         setTimeout(async () => {
@@ -29,33 +28,23 @@
                 const btnAbrir = document.getElementById('btn-abrir-ajustes');
                 const modal = document.getElementById('ajustes-modal');
                 
-                console.log('Verificando elementos:', {
-                    pageContent: !!pageContent,
-                    btnAbrir: !!btnAbrir,
-                    modal: !!modal
-                });
-                
                 if (!pageContent || !btnAbrir) {
-                    console.warn('initAjustes: No se encontraron los elementos necesarios. Reintentando...');
-                    // Reintentar después de un breve delay
+                    // Reintentar después de un breve delay si los elementos no están listos
                     setTimeout(() => {
                         const btnAbrirRetry = document.getElementById('btn-abrir-ajustes');
                         const modalRetry = document.getElementById('ajustes-modal');
                         if (btnAbrirRetry && modalRetry) {
-                            console.log('Elementos encontrados en segundo intento');
                             setupEventListeners();
                             if (modalRetry) {
                                 modalRetry.style.display = 'none';
                                 modalRetry.classList.remove('active');
                             }
                         } else {
-                            console.error('No se pudieron encontrar los elementos después del reintento');
+                            console.error('❌ No se pudieron encontrar los elementos de ajustes después del reintento');
                         }
                     }, 200);
                     return;
                 }
-                
-                console.log('Configurando event listeners de ajustes...');
                 
                 // Asegurar que el modal esté oculto por defecto
                 if (modal) {
@@ -71,9 +60,9 @@
                 await cargarPorcentajes();
                 await cargarModoApariencia();
                 window.ajustesModule.initialized = true;
-                console.log('Ajustes inicializados correctamente');
+                console.log('✅ Módulo de ajustes inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar ajustes:', error);
+                console.error('❌ Error al inicializar ajustes:', error);
             }
         }, 200);
     };
@@ -82,17 +71,16 @@
     function setupEventListeners() {
         // Botón para abrir modal
         const btnAbrirAjustes = document.getElementById('btn-abrir-ajustes');
-        console.log('Configurando botón abrir ajustes:', btnAbrirAjustes);
+        // Configurar botón para abrir el modal de ajustes
         if (btnAbrirAjustes) {
             btnAbrirAjustes.removeEventListener('click', abrirModal);
             btnAbrirAjustes.addEventListener('click', function(e) {
-                console.log('Click en botón abrir ajustes');
                 e.preventDefault();
                 e.stopPropagation();
                 abrirModal();
             });
         } else {
-            console.error('No se encontró el botón btn-abrir-ajustes');
+            console.error('❌ No se encontró el botón btn-abrir-ajustes');
         }
 
         // Botones del modal
@@ -171,6 +159,20 @@
             horaReportes.addEventListener('change', actualizarConfiguracion);
         }
         
+        // Frecuencia de actualizaciones
+        const frecuenciaActualizaciones = document.getElementById('frecuencia-actualizaciones');
+        if (frecuenciaActualizaciones) {
+            frecuenciaActualizaciones.removeEventListener('change', actualizarConfiguracion);
+            frecuenciaActualizaciones.addEventListener('change', actualizarConfiguracion);
+        }
+        
+        // Botón para verificar actualizaciones manualmente
+        const btnVerificarActualizaciones = document.getElementById('btn-verificar-actualizaciones');
+        if (btnVerificarActualizaciones) {
+            btnVerificarActualizaciones.removeEventListener('click', verificarActualizacionesManual);
+            btnVerificarActualizaciones.addEventListener('click', verificarActualizacionesManual);
+        }
+        
         // Formatear BD
         const btnFormatear = document.getElementById('btn-formatear-bd');
         if (btnFormatear) {
@@ -211,7 +213,7 @@
             // Usar la clase 'active' como lo hacen otros modales
             modal.classList.add('active');
             modal.style.display = 'flex'; // Asegurar que se muestre
-            console.log('Modal display:', modal.style.display, 'Active class:', modal.classList.contains('active'));
+            
             try {
                 // Crear tablas si no existen
                 await crearTablaSiNoExiste();
@@ -222,13 +224,12 @@
                 await cargarPorcentajes();
                 await cargarConfiguracion();
                 renderizarEmpleadosConSliders();
-                console.log('Modal abierto correctamente');
             } catch (error) {
-                console.error('Error al cargar datos del modal:', error);
+                console.error('❌ Error al cargar datos del modal de ajustes:', error);
                 mostrarError('Error al cargar datos: ' + (error.message || error));
             }
         } else {
-            console.error('No se encontró el modal ajustes-modal');
+            console.error('❌ No se encontró el modal ajustes-modal');
         }
     }
 
@@ -503,7 +504,8 @@
                 ['max_backups', '20', 'number', 'Número máximo de backups a mantener'],
                 ['reportes_automaticos', 'false', 'boolean', 'Generación automática de reportes'],
                 ['hora_reportes', '23:00', 'text', 'Hora para generar reportes automáticos'],
-                ['tutoriales_activos', 'true', 'boolean', 'Tutoriales interactivos activados']
+                ['tutoriales_activos', 'true', 'boolean', 'Tutoriales interactivos activados'],
+                ['frecuencia_actualizaciones', 'cada-hora', 'text', 'Frecuencia de verificación de actualizaciones']
             ];
             
             for (const [clave, valor, tipo, descripcion] of configs) {
@@ -560,6 +562,11 @@
             const tutorialesActivos = await obtenerConfiguracion('tutoriales_activos', 'true');
             const tutorialesCheck = document.getElementById('tutoriales-activos');
             if (tutorialesCheck) tutorialesCheck.checked = tutorialesActivos === 'true';
+            
+            // Frecuencia de actualizaciones
+            const frecuenciaActualizaciones = await obtenerConfiguracion('frecuencia_actualizaciones', 'cada-hora');
+            const frecuenciaActualizacionesSelect = document.getElementById('frecuencia-actualizaciones');
+            if (frecuenciaActualizacionesSelect) frecuenciaActualizacionesSelect.value = frecuenciaActualizaciones;
         } catch (error) {
             console.error('Error al cargar configuración:', error);
         }
@@ -630,11 +637,17 @@
         } else if (elemento.id === 'tutoriales-activos') {
             clave = 'tutoriales_activos';
             valor = elemento.checked ? 'true' : 'false';
+        } else if (elemento.id === 'frecuencia-actualizaciones') {
+            clave = 'frecuencia_actualizaciones';
+            valor = elemento.value;
+            // Reprogramar actualizaciones cuando cambie la frecuencia
+            if (window.electronAPI && window.electronAPI.reprogramarActualizaciones) {
+                window.electronAPI.reprogramarActualizaciones();
+            }
         }
         
         if (clave) {
             await guardarConfiguracion(clave, valor);
-            console.log(`Configuración ${clave} actualizada a ${valor}`);
             
             // Reprogramar si es necesario
             if (reprogramarRespaldos && window.electronAPI && window.electronAPI.reprogramarRespaldos) {
@@ -1078,6 +1091,39 @@
             window.mostrarError(mensaje);
         } else {
             alert(mensaje);
+        }
+    }
+    
+    // Función para verificar actualizaciones manualmente desde el botón
+    async function verificarActualizacionesManual() {
+        const btn = document.getElementById('btn-verificar-actualizaciones');
+        if (btn) {
+            // Deshabilitar el botón mientras se verifica
+            btn.disabled = true;
+            btn.textContent = '🔍 Buscando...';
+        }
+        
+        try {
+            // Llamar a la función global de verificación manual
+            if (typeof window.verificarActualizacionesManual === 'function') {
+                await window.verificarActualizacionesManual();
+            } else {
+                console.error('❌ Función verificarActualizacionesManual no está disponible');
+                if (typeof window.mostrarNotificacion === 'function') {
+                    window.mostrarNotificacion('Error: Sistema de actualizaciones no disponible', 'error', 5000);
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error al verificar actualizaciones:', error);
+            if (typeof window.mostrarNotificacion === 'function') {
+                window.mostrarNotificacion('Error al verificar actualizaciones: ' + error.message, 'error', 5000);
+            }
+        } finally {
+            // Restaurar el botón
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🔍 Buscar Actualizaciones';
+            }
         }
     }
 })();

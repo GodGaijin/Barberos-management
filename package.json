@@ -1,6 +1,6 @@
 {
   "name": "barberos-management",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "description": "Sistema de gestión para barbería",
   "main": "src/main/main.js",
   "scripts": {
@@ -49,6 +49,7 @@
           ]
         }
       ],
+      "artifactName": "Barberos.Management.Setup.${version}.${ext}",
       "sign": null,
       "signingHashAlgorithms": null,
       "verifyUpdateCodeSignature": false,

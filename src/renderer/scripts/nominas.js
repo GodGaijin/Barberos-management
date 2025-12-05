@@ -24,19 +24,16 @@
     var consumosPendientes = window.nominasModule.consumosPendientes;
     var initialized = window.nominasModule.initialized;
 
-    // Inicialización - función exportada para ser llamada desde main.js
+    // Inicializa el módulo de nóminas cuando se carga la página
     window.initNominas = function() {
-        console.log('initNominas llamado');
         setTimeout(() => {
             try {
-                console.log('Configurando event listeners...');
                 setupEventListeners();
-                console.log('Cargando datos...');
                 cargarDatos();
                 window.nominasModule.initialized = true;
-                console.log('Nóminas inicializadas correctamente');
+                console.log('✅ Módulo de nóminas inicializado correctamente');
             } catch (error) {
-                console.error('Error al inicializar nóminas:', error);
+                console.error('❌ Error al inicializar nóminas:', error);
                 const tbody = document.getElementById('nominas-table-body');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="10" class="error-message">Error al inicializar: ' + error.message + '</td></tr>';
@@ -214,10 +211,9 @@
         }
     }
 
-    // Cargar nóminas desde la base de datos
+    // Obtiene todas las nóminas de la base de datos y las muestra en la tabla
     async function cargarNominas() {
         try {
-            console.log('Iniciando carga de nóminas...');
             const tbody = document.getElementById('nominas-table-body');
             if (tbody) {
                 tbody.innerHTML = '<tr><td colspan="12" class="loading">Cargando nóminas...</td></tr>';
@@ -227,7 +223,7 @@
                 throw new Error('electronAPI no está disponible');
             }
             
-            console.log('Consultando base de datos...');
+            // Consultar todas las nóminas con el nombre del empleado
             const resultados = await window.electronAPI.dbQuery(`
                 SELECT 
                     n.*,
@@ -236,8 +232,8 @@
                 JOIN Empleados e ON n.id_empleado = e.id
                 ORDER BY n.id DESC
             `);
-            console.log('Nóminas obtenidas:', resultados);
             
+            console.log(`📋 Nóminas cargadas: ${resultados?.length || 0} registros`);
             window.nominasModule.nominas = resultados || [];
             nominas.length = 0;
             if (window.nominasModule.nominas.length > 0) {
@@ -527,6 +523,8 @@
                     sr.precio_cobrado,
                     sr.propina,
                     COALESCE(sr.propina_en_dolares, 0) as propina_en_dolares,
+                    COALESCE(sr.pagado_bs, 0) as servicio_pagado_bs,
+                    COALESCE(sr.pagado_dolares, 0) as servicio_pagado_dolares,
                     sr.estado,
                     COALESCE(s.nombre, 'Propina Independiente') as nombre_servicio,
                     COALESCE(s.referencia_en_dolares, 0) as servicio_referencia_dolares,
@@ -537,7 +535,7 @@
                     COALESCE(t.total_en_dolares, 0) as transaccion_total_dolares,
                     t.estado as transaccion_estado,
                     -- Calcular el total de servicios y productos de la transacción (SIN propinas)
-                    -- Esto es importante para calcular correctamente la proporción en pagos mixtos
+                    -- Esto es importante para calcular correctamente la proporción en pagos mixtos (fallback si no hay pagado_bs/pagado_dolares)
                     (SELECT COALESCE(SUM(sr2.precio_cobrado), 0) 
                      FROM ServiciosRealizados sr2 
                      WHERE sr2.id_transaccion = t.id 
@@ -571,7 +569,9 @@
                 ORDER BY fecha_pago DESC
             `, [idEmpleado]);
             
-            console.log('Nóminas pagadas encontradas:', nominasPagadas.length, nominasPagadas);
+            if (nominasPagadas.length > 0) {
+                console.log(`💰 Nóminas pagadas encontradas para empleado ${idEmpleado}: ${nominasPagadas.length}`);
+            }
             
             // Función auxiliar para convertir fecha a objeto Date para comparación
             const parsearFecha = (fechaStr) => {
@@ -604,6 +604,7 @@
             // Filtrar servicios que ya fueron pagados completamente según su moneda de pago
             // La lógica: si hay una nómina pagada en la moneda correspondiente que sea posterior o igual
             // a la fecha del servicio, entonces ese servicio ya fue pagado en esa moneda
+            // IMPORTANTE: Para servicios mixtos, necesitamos saber qué parte ya fue pagada
             const serviciosPendientes = servicios.filter(servicio => {
                 const transaccionPagadoBs = parseFloat(servicio.transaccion_pagado_bs || 0);
                 const transaccionPagadoDolares = parseFloat(servicio.transaccion_pagado_dolares || 0);
@@ -633,6 +634,7 @@
                 }
                 
                 // Verificar si ya existe una nómina pagada que incluya este servicio
+                // IMPORTANTE: Solo marcar como pagado en la moneda correspondiente de la nómina
                 let yaPagadoBs = false;
                 let yaPagadoDolares = false;
                 
@@ -648,16 +650,25 @@
                     // Si la nómina es posterior o igual a la fecha del servicio, podría haberlo incluido
                     // (las nóminas incluyen todos los servicios pendientes hasta su fecha)
                     if (fechaNominaDate >= fechaServicioDate) {
-                        if (nomina.moneda_pago === 'bs' || nomina.moneda_pago === 'mixto') {
+                        const monedaPago = nomina.moneda_pago || 'bs';
+                        
+                        // Solo marcar como pagado en Bs si la nómina es en Bs o mixta
+                        // Si la nómina es en bolívares, marcar la parte en Bs como pagada
+                        if (monedaPago === 'bs') {
                             yaPagadoBs = true;
-                            console.log(`Servicio ${servicio.id} marcado como pagado en Bs por nómina ${nomina.id} (fecha: ${nomina.fecha_pago})`);
                         }
-                        if (nomina.moneda_pago === 'dolares' || nomina.moneda_pago === 'mixto') {
+                        
+                        // Si la nómina es en dólares, marcar la parte en dólares como pagada
+                        if (monedaPago === 'dolares') {
                             yaPagadoDolares = true;
-                            console.log(`Servicio ${servicio.id} marcado como pagado en $ por nómina ${nomina.id} (fecha: ${nomina.fecha_pago})`);
                         }
                     }
                 }
+                
+                // Guardar información de qué parte ya fue pagada en el objeto servicio
+                // para usarla en el cálculo de comisiones
+                servicio._yaPagadoBs = yaPagadoBs;
+                servicio._yaPagadoDolares = yaPagadoDolares;
                 
                 // Determinar si el servicio debe incluirse (pendiente) o excluirse (ya pagado)
                 let incluirServicio = true;
@@ -684,8 +695,6 @@
                     });
                     incluirServicio = !tieneNominaPosterior;
                 }
-                
-                console.log(`Servicio ${servicio.id}: fecha=${fechaServicio}, sePagoSoloEnBs=${sePagoSoloEnBs}, sePagoSoloEnDolares=${sePagoSoloEnDolares}, sePagoMixto=${sePagoMixto}, yaPagadoBs=${yaPagadoBs}, yaPagadoDolares=${yaPagadoDolares}, incluirServicio=${incluirServicio}`);
                 
                 return incluirServicio;
             });
@@ -837,6 +846,11 @@
                 sePagoSoloEnBs = transaccionTotalBs > 0 && transaccionTotalDolares === 0;
                 sePagoSoloEnDolares = transaccionTotalDolares > 0 && transaccionTotalBs === 0;
                 sePagoMixto = transaccionTotalBs > 0 && transaccionTotalDolares > 0;
+            } else {
+                // Para servicios en transacciones abiertas, usar totales como referencia
+                sePagoSoloEnBs = transaccionTotalBs > 0 && transaccionTotalDolares === 0;
+                sePagoSoloEnDolares = transaccionTotalDolares > 0 && transaccionTotalBs === 0;
+                sePagoMixto = transaccionTotalBs > 0 && transaccionTotalDolares > 0;
             }
             
             if (!esPropinaIndependiente) {
@@ -853,67 +867,70 @@
                     if (servicioReferenciaDolares > 0) {
                         comisionesDolares += servicioReferenciaDolares;
                     } else if (tasaHoy && tasaHoy.tasa_bs_por_dolar) {
-                        // Si no tenemos precio de referencia, convertir desde bolívares
-                        comisionesDolares += precioServicioBs / tasaHoy.tasa_bs_por_dolar;
+                        // Si no tenemos precio de referencia, convertir desde bolívares usando la tasa del día
+                        const comisionEnDolares = precioServicioBs / tasaHoy.tasa_bs_por_dolar;
+                        comisionesDolares += comisionEnDolares;
                     }
                 } else if (sePagoMixto) {
-                    // Si se pagó mixto, la comisión es directamente proporcional a lo que se pagó en cada moneda
-                    // La comisión del empleado es el porcentaje de lo que se pagó en cada moneda, NO del precio del servicio
+                    // Si se pagó mixto, usar los campos pagado_bs y pagado_dolares del servicio si están disponibles
+                    // (estos campos se guardan cuando se cierra la transacción)
+                    // Si no están disponibles (transacciones antiguas), calcular la proporción como fallback
                     
-                    // Usar los valores pagados si la transacción está cerrada, sino usar los totales
-                    let pagadoBsParaProporcion = transaccionPagadoBs;
-                    let pagadoDolaresParaProporcion = transaccionPagadoDolares;
+                    const servicioPagadoBs = parseFloat(servicio.servicio_pagado_bs || 0);
+                    const servicioPagadoDolares = parseFloat(servicio.servicio_pagado_dolares || 0);
                     
-                    if (transaccionEstado !== 'cerrada') {
-                        // Si la transacción está abierta, usar los totales como referencia
-                        pagadoBsParaProporcion = transaccionTotalBs;
-                        pagadoDolaresParaProporcion = transaccionTotalDolares;
+                    let partePagadaBs = 0;
+                    let partePagadaDolares = 0;
+                    
+                    // Si el servicio tiene campos pagado_bs/pagado_dolares guardados, usarlos directamente
+                    if (servicioPagadoBs > 0 || servicioPagadoDolares > 0) {
+                        partePagadaBs = servicioPagadoBs;
+                        partePagadaDolares = servicioPagadoDolares;
+                    } else {
+                        // Para transacciones antiguas que no tienen estos campos, calcular la proporción
+                        // Usar los valores pagados si la transacción está cerrada, sino usar los totales
+                        let pagadoBsParaProporcion = transaccionPagadoBs;
+                        let pagadoDolaresParaProporcion = transaccionPagadoDolares;
+                        
+                        if (transaccionEstado !== 'cerrada') {
+                            // Si la transacción está abierta, usar los totales como referencia
+                            pagadoBsParaProporcion = transaccionTotalBs;
+                            pagadoDolaresParaProporcion = transaccionTotalDolares;
+                        }
+                        
+                        // Obtener el total de servicios y productos de la transacción (sin propinas)
+                        const totalServiciosTransaccionBs = parseFloat(servicio.total_servicios_transaccion_bs || 0);
+                        const totalProductosTransaccionBs = parseFloat(servicio.total_productos_transaccion_bs || 0);
+                        const totalServiciosYProductosBs = totalServiciosTransaccionBs + totalProductosTransaccionBs;
+                        
+                        if (totalServiciosYProductosBs > 0) {
+                            // Calcular proporción
+                            const proporcionServicioEnTransaccion = precioServicioBs / totalServiciosYProductosBs;
+                            partePagadaBs = pagadoBsParaProporcion * proporcionServicioEnTransaccion;
+                            partePagadaDolares = pagadoDolaresParaProporcion * proporcionServicioEnTransaccion;
+                        }
                     }
                     
-                    // IMPORTANTE: El total de la transacción (transaccionTotalBs) incluye propinas en dólares convertidas a bolívares
-                    // Para calcular correctamente la proporción, debemos usar SOLO el total de servicios y productos (SIN propinas)
-                    // Esto asegura que la proporción se calcule correctamente
+                    // IMPORTANTE: Verificar si alguna parte ya fue pagada en nóminas anteriores
+                    // Si ya se pagó en Bs, solo calcular la parte en dólares pendiente
+                    // Si ya se pagó en dólares, solo calcular la parte en Bs pendiente
+                    const yaPagadoBs = servicio._yaPagadoBs || false;
+                    const yaPagadoDolares = servicio._yaPagadoDolares || false;
                     
-                    // Obtener el total de servicios y productos de la transacción (sin propinas)
-                    // Esto incluye TODOS los servicios y productos de la transacción, no solo los de este empleado
-                    // porque necesitamos calcular qué proporción del pago total le corresponde a este servicio específico
-                    const totalServiciosTransaccionBs = parseFloat(servicio.total_servicios_transaccion_bs || 0);
-                    const totalProductosTransaccionBs = parseFloat(servicio.total_productos_transaccion_bs || 0);
-                    const totalServiciosYProductosBs = totalServiciosTransaccionBs + totalProductosTransaccionBs;
+                    // Tolerancia para considerar si una parte es cero (por errores de redondeo)
+                    const tolerancia = 0.01;
                     
-                    // Calcular qué parte del total de servicios y productos representa este servicio
-                    // Ejemplo: Si hay 2 servicios (3750 Bs y 750 Bs), total = 4500 Bs
-                    // - Servicio 1 (3750): proporción = 3750/4500 = 0.8333
-                    // - Servicio 2 (750): proporción = 750/4500 = 0.1667
-                    const proporcionServicioEnTransaccion = totalServiciosYProductosBs > 0 
-                        ? precioServicioBs / totalServiciosYProductosBs 
-                        : 1;
+                    // Solo agregar a comisionesBs si la parte en Bs es mayor que la tolerancia
+                    // y NO se ha pagado ya en Bs por una nómina anterior
+                    if (partePagadaBs > tolerancia && !yaPagadoBs) {
+                        comisionesBs += partePagadaBs;
+                    }
                     
-                    // Distribuir el pago proporcionalmente según el precio del servicio
-                    // Ejemplo: Si se pagó 2500 Bs + 10$ en una transacción con servicios totales de 4500 Bs:
-                    // - Servicio 1 (3750 Bs, proporción 0.8333): parte en Bs = 2500 * 0.8333 = 2083.33 Bs, parte en $ = 10 * 0.8333 = 8.33$
-                    // - Servicio 2 (750 Bs, proporción 0.1667): parte en Bs = 2500 * 0.1667 = 416.67 Bs, parte en $ = 10 * 0.1667 = 1.67$
-                    const partePagadaBs = pagadoBsParaProporcion * proporcionServicioEnTransaccion;
-                    const partePagadaDolares = pagadoDolaresParaProporcion * proporcionServicioEnTransaccion;
-                    
-                    // La comisión es directamente la parte pagada en cada moneda para este servicio
-                    // El porcentaje de comisión (60%, etc.) se aplicará después en el cálculo de la nómina
-                    // Ejemplo: Si al servicio 1 le corresponde 2083.33 Bs + 8.33$:
-                    // - Comisión en Bs: 2083.33 Bs (el porcentaje se aplica después: 2083.33 * 0.6 = 1250 Bs)
-                    // - Comisión en $: 8.33$ (el porcentaje se aplica después: 8.33 * 0.6 = 5$)
-                    comisionesBs += partePagadaBs;
-                    comisionesDolares += partePagadaDolares;
-                    
-                    // Debug: Log para verificar el cálculo de proporción y distribución
-                    console.log(`[Nómina] Empleado ${servicio.id_empleado || 'N/A'}, Servicio ${servicio.id_servicio || 'N/A'}:`, {
-                        precioServicioBs: precioServicioBs.toFixed(2),
-                        totalServiciosYProductosBs: totalServiciosYProductosBs.toFixed(2),
-                        proporcionServicioEnTransaccion: proporcionServicioEnTransaccion.toFixed(4),
-                        pagadoBsParaProporcion: pagadoBsParaProporcion.toFixed(2),
-                        pagadoDolaresParaProporcion: pagadoDolaresParaProporcion.toFixed(2),
-                        partePagadaBs: partePagadaBs.toFixed(2),
-                        partePagadaDolares: partePagadaDolares.toFixed(2)
-                    });
+                    // Solo agregar a comisionesDolares si la parte en dólares es mayor que la tolerancia
+                    // y NO se ha pagado ya en dólares por una nómina anterior
+                    if (partePagadaDolares > tolerancia && !yaPagadoDolares) {
+                        comisionesDolares += partePagadaDolares;
+                    }
                 } else {
                     // Si no hay información de pago, asignar a bolívares por defecto
                     comisionesBs += precioServicioBs;
@@ -921,34 +938,56 @@
             }
             
             // Manejar propinas
+            // IMPORTANTE: Verificar si las propinas ya fueron pagadas en nóminas anteriores
             const propinaBsValor = parseFloat(servicio.propina || 0);
             const propinaDolaresValor = parseFloat(servicio.propina_en_dolares || 0);
+            
+            // Obtener información de si ya fue pagado (usando la misma lógica que para servicios)
+            const yaPagadoBs = servicio._yaPagadoBs || false;
+            const yaPagadoDolares = servicio._yaPagadoDolares || false;
             
             if (esPropinaIndependiente) {
                 // Para propinas independientes, asignar según su moneda original
                 // Las propinas en dólares van solo a dólares, las propinas en bolívares van solo a bolívares
-                if (propinaDolaresValor > 0) {
+                // Solo agregar si NO fueron pagadas en nóminas anteriores
+                if (propinaDolaresValor > 0 && !yaPagadoDolares) {
                     propinasDolares += propinaDolaresValor;
                 }
-                if (propinaBsValor > 0) {
+                if (propinaBsValor > 0 && !yaPagadoBs) {
                     propinasBs += propinaBsValor;
                 }
             } else {
                 // Para propinas de servicios, usar la lógica basada en cómo se pagó la transacción
                 if (sePagoSoloEnBs) {
                     // Si se pagó solo en bolívares, las propinas van solo a bolívares
-                    propinasBs += propinaBsValor;
+                    // Solo agregar si NO fue pagada en nóminas anteriores
+                    if (propinaBsValor > 0 && !yaPagadoBs) {
+                        propinasBs += propinaBsValor;
+                    }
                 } else if (sePagoSoloEnDolares) {
                     // Si se pagó solo en dólares, las propinas van solo a dólares
-                    propinasDolares += propinaDolaresValor;
+                    // Solo agregar si NO fue pagada en nóminas anteriores
+                    if (propinaDolaresValor > 0 && !yaPagadoDolares) {
+                        propinasDolares += propinaDolaresValor;
+                    }
                 } else if (sePagoMixto) {
                     // Si se pagó mixto, las propinas van según su moneda original
-                    propinasBs += propinaBsValor;
-                    propinasDolares += propinaDolaresValor;
+                    // Solo agregar si NO fueron pagadas en nóminas anteriores
+                    if (propinaBsValor > 0 && !yaPagadoBs) {
+                        propinasBs += propinaBsValor;
+                    }
+                    if (propinaDolaresValor > 0 && !yaPagadoDolares) {
+                        propinasDolares += propinaDolaresValor;
+                    }
                 } else {
                     // Si no hay información de pago, asignar propinas según su moneda original
-                    propinasBs += propinaBsValor;
-                    propinasDolares += propinaDolaresValor;
+                    // Solo agregar si NO fueron pagadas en nóminas anteriores
+                    if (propinaBsValor > 0 && !yaPagadoBs) {
+                        propinasBs += propinaBsValor;
+                    }
+                    if (propinaDolaresValor > 0 && !yaPagadoDolares) {
+                        propinasDolares += propinaDolaresValor;
+                    }
                 }
             }
         });
@@ -961,6 +1000,9 @@
 
         // Calcular subtotal (propinas NO se descuentan, solo se restan los descuentos de consumos)
         // Las propinas se suman al total final, NO se descuentan
+        // IMPORTANTE: El subtotal en Bs solo debe incluir comisiones en Bs (no incluir servicios pagados solo en dólares)
+        // El subtotal en Bs se calcula como: comisionesBs - descuentosBs
+        // Las comisiones en dólares se manejan por separado y no afectan el subtotal en Bs
         const subtotal = comisionesBs - descuentosBs;
         // Las propinas se suman después de aplicar el porcentaje
 
@@ -1009,7 +1051,13 @@
         // El total en dólares solo incluye comisiones en dólares + propinas en dólares
         // No depende de la tasa del día ni de los bolívares
         const comisionesDolares = parseFloat(document.getElementById('nomina-comisiones-dolares').value) || 0;
-        const totalPagadoDolares = (comisionesDolares * (porcentaje / 100)) + propinasDolares;
+        const totalPagadoDolaresCalculado = (comisionesDolares * (porcentaje / 100)) + propinasDolares;
+        
+        // IMPORTANTE: Redondear hacia abajo (floor) el total en dólares
+        // Cualquier cantidad decimal se redondea hacia abajo a favor del comercio
+        // Ejemplo: 3.17$ → 3$, 3.5$ → 3$, 3.99$ → 3$
+        const totalPagadoDolares = Math.floor(totalPagadoDolaresCalculado);
+        
         if (totalDolaresInput) {
             totalDolaresInput.value = totalPagadoDolares.toFixed(2);
         }
@@ -1170,7 +1218,10 @@
             porcentaje = await window.obtenerPorcentajeComision(idEmpleado);
         }
         const totalPagadoBs = parseFloat(document.getElementById('nomina-total').value) || 0;
-        const totalPagadoDolares = parseFloat(document.getElementById('nomina-total-dolares').value) || 0;
+        // IMPORTANTE: Aplicar redondeo hacia abajo (floor) al total en dólares antes de guardar
+        // Esto asegura que cualquier cantidad decimal se redondee hacia abajo a favor del comercio
+        const totalPagadoDolaresCalculado = parseFloat(document.getElementById('nomina-total-dolares').value) || 0;
+        const totalPagadoDolares = Math.floor(totalPagadoDolaresCalculado);
         const monedaPago = document.getElementById('nomina-moneda-pago').value || 'bs';
         const estadoPago = document.getElementById('nomina-estado-pago').value || 'pendiente';
 
@@ -1374,8 +1425,7 @@
                 ORDER BY ce.id DESC
             `, [id]);
 
-            // Calcular subtotal
-            const subtotal = parseFloat(nomina.comisiones_bs || 0) + parseFloat(nomina.propina_bs || 0) - parseFloat(nomina.descuentos_consumos_bs || 0);
+            const monedaPago = nomina.moneda_pago || 'bs';
             const porcentaje = parseInt(nomina.porcentaje_pagado || 100);
             
             // Formatear fecha
@@ -1387,6 +1437,81 @@
             
             document.getElementById('ver-nomina-titulo').textContent = `Nómina #${nomina.id}`;
             
+            // Generar HTML según la moneda de pago (solo bs o dolares, no mixto)
+            let htmlComisiones = '';
+            let htmlPropinas = '';
+            let htmlDescuentos = '';
+            let htmlResumen = '';
+            
+            if (monedaPago === 'dolares') {
+                // Solo mostrar campos en dólares
+                htmlComisiones = `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Comisiones</h4>
+                        <p><strong>Comisiones:</strong> $${parseFloat(nomina.comisiones_referencia_en_dolares || 0).toFixed(2)}</p>
+                    </div>
+                `;
+                
+                htmlPropinas = `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Propinas</h4>
+                        <p><strong>Propinas:</strong> $${parseFloat(nomina.propina_en_dolares || 0).toFixed(2)}</p>
+                    </div>
+                `;
+                
+                // Descuentos no aplican en nóminas en dólares
+                htmlDescuentos = '';
+                
+                // Calcular total en dólares
+                const totalDolares = parseFloat(nomina.total_pagado_dolares || 0) || 
+                                   (parseFloat(nomina.comisiones_referencia_en_dolares || 0) + parseFloat(nomina.propina_en_dolares || 0));
+                
+                htmlResumen = `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Resumen de Pago</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <p><strong>Porcentaje Pagado:</strong> ${porcentaje}%</p>
+                            <p style="grid-column: 1 / -1;"><strong>Total Pagado:</strong> <span style="font-size: 18px; font-weight: 600;">$${totalDolares.toFixed(2)}</span></p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Solo mostrar campos en bolívares (monedaPago === 'bs')
+                const subtotal = parseFloat(nomina.comisiones_bs || 0) + parseFloat(nomina.propina_bs || 0) - parseFloat(nomina.descuentos_consumos_bs || 0);
+                
+                htmlComisiones = `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Comisiones</h4>
+                        <p><strong>Comisiones:</strong> ${parseFloat(nomina.comisiones_bs || 0).toFixed(2)} Bs</p>
+                    </div>
+                `;
+                
+                htmlPropinas = `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Propinas</h4>
+                        <p><strong>Propinas:</strong> ${parseFloat(nomina.propina_bs || 0).toFixed(2)} Bs</p>
+                    </div>
+                `;
+                
+                htmlDescuentos = `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Descuentos</h4>
+                        <p><strong>Descuentos por Consumos:</strong> ${parseFloat(nomina.descuentos_consumos_bs || 0).toFixed(2)} Bs</p>
+                    </div>
+                `;
+                
+                htmlResumen = `
+                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
+                        <h4 style="margin-top: 0; color: var(--text-primary);">Resumen de Pago</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <p><strong>Subtotal:</strong> ${subtotal.toFixed(2)} Bs</p>
+                            <p><strong>Porcentaje Pagado:</strong> ${porcentaje}%</p>
+                            <p style="grid-column: 1 / -1;"><strong>Total Pagado:</strong> <span style="font-size: 18px; font-weight: 600;">${parseFloat(nomina.total_pagado_bs || 0).toFixed(2)} Bs</span></p>
+                        </div>
+                    </div>
+                `;
+            }
+            
             const contenido = document.getElementById('ver-nomina-contenido');
             contenido.innerHTML = `
                 <div style="display: flex; flex-direction: column; gap: 20px;">
@@ -1395,29 +1520,13 @@
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
                             <p><strong>Empleado:</strong> ${nomina.nombre_empleado}</p>
                             <p><strong>Fecha de Pago:</strong> ${fechaPago}</p>
+                            <p><strong>Moneda de Pago:</strong> ${monedaPago === 'dolares' ? 'Dólares ($)' : 'Bolívares (Bs)'}</p>
                         </div>
                     </div>
 
-                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
-                        <h4 style="margin-top: 0; color: var(--text-primary);">Comisiones</h4>
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                            <p><strong>Referencia:</strong> $${parseFloat(nomina.comisiones_referencia_en_dolares || 0).toFixed(2)}</p>
-                            <p><strong>Bolívares:</strong> ${parseFloat(nomina.comisiones_bs || 0).toFixed(2)} Bs</p>
-                        </div>
-                    </div>
-
-                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
-                        <h4 style="margin-top: 0; color: var(--text-primary);">Propinas</h4>
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                            <p><strong>Referencia:</strong> $${parseFloat(nomina.propina_en_dolares || 0).toFixed(2)}</p>
-                            <p><strong>Bolívares:</strong> ${parseFloat(nomina.propina_bs || 0).toFixed(2)} Bs</p>
-                        </div>
-                    </div>
-
-                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
-                        <h4 style="margin-top: 0; color: var(--text-primary);">Descuentos</h4>
-                        <p><strong>Descuentos por Consumos:</strong> ${parseFloat(nomina.descuentos_consumos_bs || 0).toFixed(2)} Bs</p>
-                    </div>
+                    ${htmlComisiones}
+                    ${htmlPropinas}
+                    ${htmlDescuentos}
 
                     ${consumos && consumos.length > 0 ? `
                     <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
@@ -1443,14 +1552,7 @@
                     </div>
                     ` : ''}
 
-                    <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px;">
-                        <h4 style="margin-top: 0; color: var(--text-primary);">Resumen de Pago</h4>
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                            <p><strong>Subtotal:</strong> ${subtotal.toFixed(2)} Bs</p>
-                            <p><strong>Porcentaje Pagado:</strong> ${porcentaje}%</p>
-                            <p style="grid-column: 1 / -1;"><strong>Total Pagado:</strong> <span style="font-size: 18px; font-weight: 600;">${parseFloat(nomina.total_pagado_bs || 0).toFixed(2)} Bs</span></p>
-                        </div>
-                    </div>
+                    ${htmlResumen}
                 </div>
             `;
 

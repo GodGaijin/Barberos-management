@@ -27,6 +27,7 @@
                     <button class="tab-button" data-tab="apariencia">Apariencia</button>
                     <button class="tab-button" data-tab="respaldo">Respaldo</button>
                     <button class="tab-button" data-tab="reportes">Reportes</button>
+                    <button class="tab-button" data-tab="actualizaciones">Actualizaciones</button>
                 </div>
                 
                 <!-- Tab: Porcentajes de Nómina -->
@@ -190,6 +191,52 @@
                                     • Los reportes se generan todos los días a la hora especificada<br>
                                     • Se generan incluso si no hay transacciones<br>
                                     • Los reportes se guardan en la base de datos y pueden visualizarse en el módulo de Reportes
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Actualizaciones -->
+                <div class="tab-content" id="tab-actualizaciones">
+                    <div class="form-section">
+                        <h4>Verificación de Actualizaciones</h4>
+                        <p class="form-description">
+                            Configura la frecuencia con la que el sistema verifica automáticamente si hay nuevas versiones disponibles.
+                        </p>
+                        <div style="margin-top: 20px;">
+                            <div class="form-group">
+                                <label for="frecuencia-actualizaciones">Frecuencia de Verificación</label>
+                                <select id="frecuencia-actualizaciones" class="form-select">
+                                    <option value="cada-hora">Cada hora</option>
+                                    <option value="cada-6-horas">Cada 6 horas</option>
+                                    <option value="cada-12-horas">Cada 12 horas</option>
+                                    <option value="diario">Diario (cada 24 horas)</option>
+                                </select>
+                                <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block;">
+                                    El sistema verificará automáticamente si hay actualizaciones disponibles según la frecuencia seleccionada.
+                                </small>
+                            </div>
+                            
+                            <div style="margin-top: 30px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                                <h4 style="margin-bottom: 15px;">Verificación Manual</h4>
+                                <p class="form-description" style="margin-bottom: 15px;">
+                                    Puedes verificar manualmente si hay actualizaciones disponibles en este momento.
+                                </p>
+                                <button type="button" class="btn btn-primary" id="btn-verificar-actualizaciones">
+                                    🔍 Buscar Actualizaciones
+                                </button>
+                                <small style="color: var(--text-secondary); font-size: 12px; margin-top: 10px; display: block;">
+                                    Se te notificará si hay una nueva versión disponible.
+                                </small>
+                            </div>
+                            
+                            <div class="info-box" style="background: var(--bg-tertiary); padding: 15px; border-radius: 6px; margin-top: 20px;">
+                                <p style="color: var(--text-secondary); margin: 0;">
+                                    <strong>Información:</strong><br>
+                                    • La verificación se realiza en segundo plano<br>
+                                    • Se te notificará cuando haya una actualización disponible<br>
+                                    • Puedes verificar manualmente en cualquier momento usando el botón arriba
                                 </p>
                             </div>
                         </div>
