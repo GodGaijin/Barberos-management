@@ -3624,42 +3624,12 @@
                 return;
             }
 
-            // Obtener tasa de cambio del día de la transacción
-            let tasaCambio = null;
-            try {
-                // Extraer fecha de la transacción
-                const fechaTransaccion = transaccion.fecha_apertura;
-                let fechaFormato = null;
-                if (fechaTransaccion) {
-                    // Si está en formato DD/MM/YYYY HH:MM:SS, extraer solo la fecha
-                    if (fechaTransaccion.includes('/')) {
-                        fechaFormato = fechaTransaccion.split(' ')[0]; // Tomar solo DD/MM/YYYY
-                    } else if (fechaTransaccion.includes('-')) {
-                        // Si está en formato ISO, convertir a DD/MM/YYYY
-                        const fechaISO = fechaTransaccion.split('T')[0] || fechaTransaccion.split(' ')[0];
-                        const [year, month, day] = fechaISO.split('-');
-                        fechaFormato = `${day}/${month}/${year}`;
-                    }
-                }
-                
-                if (fechaFormato) {
-                    const tasa = await window.electronAPI.dbGet(
-                        'SELECT * FROM TasasCambio WHERE fecha = ? ORDER BY id DESC LIMIT 1',
-                        [fechaFormato]
-                    );
-                    if (tasa && tasa.tasa_bs_por_dolar > 0) {
-                        tasaCambio = parseFloat(tasa.tasa_bs_por_dolar);
-                    }
-                }
-            } catch (error) {
-                console.error('Error al obtener tasa de cambio:', error);
-            }
-
             // Obtener servicios realizados
             const serviciosRealizados = await window.electronAPI.dbQuery(`
                 SELECT 
                     sr.*,
                     s.nombre as nombre_servicio,
+                    s.referencia_en_dolares as precio_dolares_servicio,
                     e.nombre || ' ' || e.apellido as nombre_empleado
                 FROM ServiciosRealizados sr
                 JOIN Servicios s ON sr.id_servicio = s.id
@@ -3672,7 +3642,8 @@
             const productosVendidos = await window.electronAPI.dbQuery(`
                 SELECT 
                     pv.*,
-                    p.nombre as nombre_producto
+                    p.nombre as nombre_producto,
+                    p.referencia_en_dolares as precio_dolares_producto
                 FROM ProductosVendidos pv
                 JOIN Productos p ON pv.id_producto = p.id
                 WHERE pv.id_transaccion = ?
@@ -3714,10 +3685,11 @@
                             <tbody>
                                 ${serviciosRealizados.map(s => {
                                     const precioBs = parseFloat(s.precio_cobrado || 0);
-                                    const precioDolares = tasaCambio && tasaCambio > 0 ? precioBs / tasaCambio : 0;
+                                    // Usar el precio en dólares almacenado en el servicio en lugar de calcularlo con la tasa
+                                    const precioDolares = parseFloat(s.precio_dolares_servicio || 0);
                                     const propinaBs = parseFloat(s.propina || 0);
                                     const propinaDolares = parseFloat(s.propina_en_dolares || 0);
-                                    const propinaDolaresCalculada = tasaCambio && tasaCambio > 0 && propinaDolares === 0 ? propinaBs / tasaCambio : propinaDolares;
+                                    const propinaDolaresCalculada = propinaDolares;
                                     
                                     return `
                                     <tr style="border-bottom: 1px solid var(--border-color);">
@@ -3749,8 +3721,10 @@
                                 ${productosVendidos.map(p => {
                                     const precioUnitarioBs = parseFloat(p.precio_unitario || 0);
                                     const precioTotalBs = parseFloat(p.precio_total || 0);
-                                    const precioUnitarioDolares = tasaCambio && tasaCambio > 0 ? precioUnitarioBs / tasaCambio : 0;
-                                    const precioTotalDolares = tasaCambio && tasaCambio > 0 ? precioTotalBs / tasaCambio : 0;
+                                    // Usar el precio en dólares almacenado en el producto en lugar de calcularlo con la tasa
+                                    const precioUnitarioDolares = parseFloat(p.precio_dolares_producto || 0);
+                                    const cantidad = parseFloat(p.cantidad || 0);
+                                    const precioTotalDolares = precioUnitarioDolares * cantidad;
                                     
                                     return `
                                     <tr style="border-bottom: 1px solid var(--border-color);">
