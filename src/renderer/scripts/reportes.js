@@ -466,7 +466,8 @@
             const productos = await window.electronAPI.dbQuery(`
                 SELECT 
                     pv.*,
-                    p.nombre as nombre_producto
+                    p.nombre as nombre_producto,
+                    COALESCE(p.referencia_en_dolares, 0) as producto_referencia_dolares
                 FROM ProductosVendidos pv
                 JOIN Productos p ON pv.id_producto = p.id
                 WHERE (
@@ -681,18 +682,25 @@
                     nombre: s.nombre_servicio,
                     empleado: s.nombre_empleado,
                     precio: s.precio_cobrado,
-                    precio_dolares: tasa ? (parseFloat(s.precio_cobrado || 0) / parseFloat(tasa.tasa_bs_por_dolar)).toFixed(2) : '0.00',
+                    // Usar el precio en dólares almacenado en el servicio en lugar de calcularlo con la tasa
+                    precio_dolares: parseFloat(s.servicio_referencia_dolares || 0).toFixed(2),
                     propina: s.propina,
                     propina_dolares: s.propina_en_dolares || 0,
                     pagado_bs: s.pagado_bs || 0,
                     pagado_dolares: s.pagado_dolares || 0
                 })),
-                productos: productos.map(p => ({
-                    nombre: p.nombre_producto,
-                    cantidad: p.cantidad,
-                    precio_total: p.precio_total,
-                    precio_total_dolares: tasa ? (parseFloat(p.precio_total || 0) / parseFloat(tasa.tasa_bs_por_dolar)).toFixed(2) : '0.00'
-                }))
+                productos: productos.map(p => {
+                    // Usar el precio en dólares almacenado en el producto (precio unitario * cantidad)
+                    const precioUnitarioDolares = parseFloat(p.producto_referencia_dolares || 0);
+                    const cantidad = parseFloat(p.cantidad || 0);
+                    const precioTotalDolares = precioUnitarioDolares * cantidad;
+                    return {
+                        nombre: p.nombre_producto,
+                        cantidad: p.cantidad,
+                        precio_total: p.precio_total,
+                        precio_total_dolares: precioTotalDolares.toFixed(2)
+                    };
+                })
             });
 
             // Fecha de creación - usar zona horaria local en formato DD/MM/YYYY HH:MM:SS
@@ -1059,8 +1067,9 @@
                                             ${emp.servicios.map(s => {
                                                 const esPropinaIndependiente = s.nombre === 'Propina Independiente';
                                                 const precioTexto = esPropinaIndependiente ? 'N/A' : `${parseFloat(s.precio || 0).toFixed(2)} Bs`;
-                                                // Calcular precio en dólares si no está guardado (para reportes antiguos)
+                                                // Usar el precio en dólares almacenado, solo calcular con tasa como fallback para reportes antiguos
                                                 let precioDolares = parseFloat(s.precio_dolares || 0);
+                                                // Solo usar el fallback si el precio almacenado es 0 y no es propina independiente
                                                 if (precioDolares === 0 && !esPropinaIndependiente && tasaCambio && parseFloat(s.precio || 0) > 0) {
                                                     precioDolares = parseFloat(s.precio || 0) / tasaCambio;
                                                 }
@@ -1097,8 +1106,9 @@
                             </thead>
                             <tbody>
                                 ${resumen.productos.map(p => {
-                                    // Calcular precio en dólares si no está guardado (para reportes antiguos)
+                                    // Usar el precio en dólares almacenado, solo calcular con tasa como fallback para reportes antiguos
                                     let precioTotalDolares = parseFloat(p.precio_total_dolares || 0);
+                                    // Solo usar el fallback si el precio almacenado es 0
                                     if (precioTotalDolares === 0 && tasaCambio && parseFloat(p.precio_total || 0) > 0) {
                                         precioTotalDolares = parseFloat(p.precio_total || 0) / tasaCambio;
                                     }
