@@ -36,11 +36,6 @@ npm run dev
 npm run build
 ```
 
-## Credenciales por defecto
-
-- Usuario: `admin`
-- Contraseña: `barberosadmin2025`
-
 ## Estructura del proyecto
 
 ```
